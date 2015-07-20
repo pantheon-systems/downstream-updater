@@ -8,5 +8,5 @@ dependencies:
 
 test:
   override:
-    - ./local/bin/bats tests
+    - bats tests
 
