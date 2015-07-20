@@ -1,0 +1,13 @@
+machine:
+  hosts:
+    localhost: 127.0.0.1
+
+dependencies:
+  pre:
+    - sudo add-apt-repository ppa:cpick/hub; sudo apt-get update; sudo apt-get install hub
+    - git clone https://github.com/sstephenson/bats.git;  sudo ./bats/install.sh /usr/local
+
+test:
+  override:
+    - ./local/bin/bats tests
+
