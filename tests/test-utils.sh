@@ -97,6 +97,7 @@ git commit -m "Initial commit of test project $upstream_name"
 git tag -a -m "Version 1.0.0" '1.0.0'
 
 hub create -d "Test 'upstream' repository created for downstream-updater tests." -h "https://github.com/pantheon-systems/downstream-updater"
+git push --set-upstream origin master
 
 #
 # Copy the files of the 'upstream' project to make the 'downstream' project.
@@ -124,6 +125,7 @@ git add .
 git commit -m "Initial commit of test project $downstream_name"
 
 hub create -d "Test 'downstream' repository created for downstream-updater tests." -h "https://github.com/pantheon-systems/downstream-updater"
+git push --set-upstream origin master
 
 # TODO: Run the 'create-update-pr' script, and confirm that no PR was created
 
