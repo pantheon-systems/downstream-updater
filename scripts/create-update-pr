@@ -7,7 +7,6 @@ PROJECT_BASE_DIR="`cd -P -- "$SELF_DIRNAME/.." && pwd -P`"
 # Default option values
 #
 PR_CREATOR=pantheon-upstream
-ENCODED_TOKEN=
 FORK_OWNER=
 REPO=pantheon-systems/drops-7
 UPSTREAM_URL=http://git.drupal.org/project/drupal.git
