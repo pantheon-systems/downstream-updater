@@ -22,13 +22,9 @@ function create_tree() {
   SUBTREE=""
   CURRENT_LEVEL=0
   while IFS='' read -r line || [[ -n $line ]]; do
-      echo "Text read: $line"
       indentation="$(echo "$line" | sed -e 's/[a-zA-Z].*//')"
       filename="$(echo "$line" | sed -e 's/[^a-zA-Z]*//' -e 's/ .*//')"
       filecontents="$(echo "$line" | sed -e 's/[^"]*//' -e 's/"//g')"
-      echo "$indentation"
-      echo "$filename"
-      echo "$filecontents"
       if [ -n "$filename" ]
       then
         # Compare our indentation level with the current indentation
@@ -67,13 +63,14 @@ function create_tree() {
 # curl https://api.github.com/authorizations --user "pantheon-upstream" --data '{"scopes":["public_repo","delete_repo"],"note":"Token used in unit tests of pantheon-systems/downstream-updater."}'
 PANTHEON_UPSTREAM_TOKEN="288f2e8348cd3d9fd4d12a5ebefdb0b8b4a8629e"
 
-
-# Create a temporary directory to work in.
-WORK_DIR="$(mkdir -d /tmp/updater-test.XXXX)"
-
 # Use the sequence number '$id' to prevent problems with conflicting repository names,
 # to insure that each repository is created fresh every time.
 id="$(date "+%Y%m%d-%H%M%S")"
+
+# Create a temporary directory to work in.
+WORK_DIR="/tmp/updater-$id"
+mkdir -p "$WORK_DIR"
+#WORK_DIR="$(mktemp -d /tmp/updater-test.XXXX)"
 
 #
 # Create an upstream project
@@ -93,11 +90,11 @@ create_tree "$WORK_DIR/$upstream_name" "$data" OVERWRITE
 
 cd "$WORK_DIR/$upstream_name"
 git init
-git config user.email 'bot@getpantheon.com'
-git config user.name 'Pantheon Automation'
+git config user.email 'developers+pantheon-upstream@getpantheon.com'
+git config user.name 'Pantheon Upstream Bot'
 git add .
 git commit -m "Initial commit of test project $upstream_name"
-git tag -a '1.0.0'
+git tag -a -m "Version 1.0.0" '1.0.0'
 
 hub create -d "Test 'upstream' repository created for downstream-updater tests." -h "https://github.com/pantheon-systems/downstream-updater"
 
@@ -105,7 +102,8 @@ hub create -d "Test 'upstream' repository created for downstream-updater tests."
 # Copy the files of the 'upstream' project to make the 'downstream' project.
 #
 downstream_name="downstream-project-$id"
-cp -R "$WORK_DIR/$upstream_name" "$WORK_DIR/downstream_name"
+cp -R "$WORK_DIR/$upstream_name" "$WORK_DIR/$downstream_name"
+rm -rf "$WORK_DIR/$downstream_name/.git"
 
 data='
 .
@@ -120,8 +118,8 @@ create_tree "$WORK_DIR/$downstream_name" "$data"
 
 cd "$WORK_DIR/$downstream_name"
 git init
-git config user.email 'bot@getpantheon.com'
-git config user.name 'Pantheon Automation'
+git config user.email 'developers+pantheon-upstream@getpantheon.com'
+git config user.name 'Pantheon Upstream Bot'
 git add .
 git commit -m "Initial commit of test project $downstream_name"
 
@@ -142,7 +140,7 @@ create_tree "$WORK_DIR/$upstream_name" "$data"
 cd "$WORK_DIR/$upstream_name"
 git add .
 git commit -m "Simulate a new upstream release."
-git tag -a '1.0.1'
+git tag -a -m "Version 1.0.1" '1.0.1'
 git push --tags
 
 # TODO: Run the 'create-update-pr' script again, and confirm that a pari of PRs were created based on the new release
