@@ -45,6 +45,7 @@ function create_tree() {
           echo "Create directory $BASE$SUBTREE"
           CURRENT_LEVEL=$(($CURRENT_LEVEL+1))
         else
+          mkdir -p "$BASE$SUBTREE"
           (
             if [ "$(basename $filename .sh)" != "$filename" ]
             then
