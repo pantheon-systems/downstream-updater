@@ -4,7 +4,7 @@ machine:
 
 dependencies:
   pre:
-    - cd $HOME; wget https://github.com/github/hub/releases/download/v2.2.1/hub-linux-386-2.2.1.tar.gz; tar xzvf hub-linux-386-2.2.1.tar.gz; sudo mv hub-linux-386-2.2.1/hub /usr/local/bin
+    - cd $HOME; wget https://github.com/github/hub/releases/download/v2.2.1/hub-linux-amd64-2.2.1.tar.gz; tar xzvf hub-linux-amd64-2.2.1.tar.gz; sudo mv hub-linux-amd64-2.2.1/hub /usr/local/bin
     - cd $HOME; git clone https://github.com/sstephenson/bats.git;  sudo ./bats/install.sh /usr/local
 
 test:
