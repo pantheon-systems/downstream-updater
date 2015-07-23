@@ -27,6 +27,11 @@ DO=
 VERBOSE=false
 
 #
+# Return codes
+#
+ERROR_ALREADY_UP_TO_DATE=10
+
+#
 # Parse command line args
 #
 while [ $# -gt 0 ] ; do
@@ -404,7 +409,7 @@ if [ -n "$commithash" ] || [ -n "$hastag" ]
 then
   echo "### $FORKED_REPO already has $availableVersion"
   for c in $commithash ; do echo && git log -1 $c ; done
-  $DO exit 0
+  exit $ERROR_ALREADY_UP_TO_DATE
 else
   hasBranch=$(git branch | grep $UPDATE_WORKING_BRANCH)
   if [ -n "$hasBranch" ]
