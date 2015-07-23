@@ -198,7 +198,7 @@ function find_pull_request_by_label() {
 #
 # Usage:
 #
-#    create_repository 'test-repo-123' 'Description of repo', 'http://homepage.io' 'has_issues has_wiki has_downloads !auto_init'
+#    create_repository 'test-repo-123' 'Description of repo', 'http://homepage.io' 'has_issues has_wiki has_downloads !auto_init' $OUTPUT_FILE
 #
 function create_repository() {
   local TARGET_REPO="$1"
@@ -213,4 +213,18 @@ function create_repository() {
   check "Created new PR '$TITLE' on $TARGET_REPO" "Failed to create PR '$TITLE' on $TARGET_REPO"
 }
 
+# DELETE /repos/:owner/:repo
 
+#
+# Delete a repository.  Watch out!
+#
+# Usage:
+#
+#    delete_repository $REPO $OUTPUT_FILE
+#
+function delete_repository() {
+  local TARGET_REPO="$1"
+  local OUTPUT_FILE="$5"
+
+  curl --user-agent "$UA" -H "Content-Type: application/json" -H "Authorization: token $ENCODED_TOKEN" -X DELETE "https://api.github.com/repos/$TARGET_REPO" --output "$OUTPUT_FILE" &>/dev/null
+}
