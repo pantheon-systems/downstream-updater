@@ -1,5 +1,11 @@
 #!/usr/bin/env bats
 
+SELF_DIRNAME="`dirname -- "$0"`"
+PROJECT_BASE_DIR="`cd -P -- "$SELF_DIRNAME/.." && pwd -P`"
+
+# Set the $PATH so that we can call create-update-pr
+PATH="$PROJECT_BASE_DIR/scripts:$PATH"
+
 load git-utils
 
 # To create the token:
@@ -50,13 +56,13 @@ load git-utils
   rm -rf "$WORK_DIR/$downstream_name/.git"
 
   data='
-  .
-  |-- README.md                 "This is a downstream repository created from the initial upstream"
-  |-- scripts
-  |   `-- enhancement.sh        "echo our enhancement"
-  `-- tests
-      `-- enhancement.tests     "Of course we will test our enhancements too"
-  '
+.
+|-- README.md                 "This is a downstream repository created from the initial upstream"
+|-- scripts
+|   `-- enhancement.sh        "echo our enhancement"
+`-- tests
+    `-- enhancement.tests     "Of course we will test our enhancements too"
+'
 
   create_tree "$WORK_DIR/$downstream_name" "$data"
 
@@ -86,20 +92,24 @@ load git-utils
   git push --set-upstream origin master
 
   #
-  # TODO: Run the 'create-update-pr' script, and confirm that no PR was created
+  # Run the 'create-update-pr' script, and confirm that no PR was created
   #
   cd "$WORK_DIR"
+  run create-update-pr --github-token "$ENCODED_TOKEN" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git"
+  [ "$status" -eq 10 ]
+
+  # TODO: should we confirm that the downstream repository is unmodified?
 
   #
   # Simulate a new release on 'upstream' by bumping the version number
   # and making a new tag.
   #
   data='
-  .
-  |-- README.md                 "This is a better test repository representing the upstream"
-  `-- scripts
-      `-- version.sh            "echo 1.0.1"
-  '
+.
+|-- README.md                 "This is a better test repository representing the upstream"
+`-- scripts
+    `-- version.sh            "echo 1.0.1"
+'
 
   create_tree "$WORK_DIR/$upstream_name" "$data"
 
@@ -110,9 +120,13 @@ load git-utils
   git push --tags
 
   #
-  # TODO: Run the 'create-update-pr' script again, and confirm that a pari of PRs were created based on the new release
+  # Run the 'create-update-pr' script again, and confirm that a pari of PRs were created based on the new release
   #
   cd "$WORK_DIR"
+  run create-update-pr --github-token "$ENCODED_TOKEN" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git"
+  [ "$status" -eq 0 ]
+
+  # TODO: Should we confirm that the downstream repository contains the right modifications?
 
   #
   # TODO: Delete the repositories we created
