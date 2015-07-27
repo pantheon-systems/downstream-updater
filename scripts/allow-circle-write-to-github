@@ -5,10 +5,10 @@
 
 
 # Get the IdentityFile line for our general-purpose ssh key with write access
-write_access_id=$(grep '^IdentityFile /home/ubuntu/.ssh/' ssh-config | grep -v 'build_key' | grep -v 'id_circleci_github' | head -n 1)
+write_access_id=$(grep '^IdentityFile /home/ubuntu/.ssh/' "$HOME/.ssh/config" | grep -v 'build_key' | grep -v 'id_circleci_github' | head -n 1)
 
 # Get the IdentityFile line used to access GitHub
-github_id=$(grep '^IdentityFile /home/ubuntu/.ssh/' ssh-config | grep 'id_circleci_github')
+github_id=$(grep '^IdentityFile /home/ubuntu/.ssh/' "$HOME/.ssh/config" | grep 'id_circleci_github')
 
 # Overwrite the read-only key with the read/write key
 sed -i -e "s#$github_id#$write_access_id#" "$HOME/.ssh/config"
