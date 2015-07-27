@@ -94,8 +94,11 @@ load git-utils
   #
   # Run the 'create-update-pr' script, and confirm that no PR was created
   #
+  # We call this with the --force-cleanup flag to delete old repositories from
+  # previous runs of the tool.
+  #
   cd "$WORK_DIR"
-  run create-update-pr --github-token "$ENCODED_TOKEN" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git"
+  run create-update-pr --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --force-cleanup --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git"
   [ "$status" -eq 10 ]
 
   # TODO: should we confirm that the downstream repository is unmodified?
@@ -123,12 +126,8 @@ load git-utils
   # Run the 'create-update-pr' script again, and confirm that a pari of PRs were created based on the new release
   #
   cd "$WORK_DIR"
-  run create-update-pr --github-token "$ENCODED_TOKEN" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git"
+  run create-update-pr --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git"
   [ "$status" -eq 0 ]
 
   # TODO: Should we confirm that the downstream repository contains the right modifications?
-
-  #
-  # TODO: Delete the repositories we created
-  #
 }

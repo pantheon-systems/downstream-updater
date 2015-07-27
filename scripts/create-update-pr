@@ -77,7 +77,7 @@ while [ $# -gt 0 ] ; do
 
     # --fork-owner USER: specify the owner of the forked repository to work
     # with (in case the user cannot commit to REPO)
-    --FORK_OWNER)
+    --fork-owner)
       FORK_OWNER="$1"
       shift
       ;;
@@ -462,8 +462,6 @@ function create_repository() {
   check "Created new PR '$TITLE' on $TARGET_REPO" "Failed to create PR '$TITLE' on $TARGET_REPO"
 }
 
-# DELETE /repos/:owner/:repo
-
 #
 # Delete a repository.  Watch out!
 #
@@ -546,7 +544,7 @@ then
 
   PANTHEON_UPSTREAM_REPOSITORIES=/tmp/panuprepos.json
   DELETE_OUTPUT=/tmp/panupdelete.json
-  list_repositories pantheon-upstream "$PANTHEON_UPSTREAM_REPOSITORIES"
+  list_repositories "$PR_CREATOR" "$PANTHEON_UPSTREAM_REPOSITORIES"
   #cat $PANTHEON_UPSTREAM_REPOSITORIES
 
   REPO_COUNT=$(jq ". | length" $PANTHEON_UPSTREAM_REPOSITORIES)
@@ -561,16 +559,16 @@ then
   then
     for n in $(seq 0 $(($REPO_COUNT-1)))
     do
-      repo_name=$(jq ".[$n].name" $PANTHEON_UPSTREAM_REPOSITORIES | sed -e 's/"//g')
-      echo "$n. $repo_name"
-      case "$repo_name" in
-        downstream-project-*|upstream-project-*)
-          echo "delete"
-          delete_repository "pantheon-upstream/$repo_name" $DELETE_OUTPUT
-          echo "response from delete:"
-          cat $DELETE_OUTPUT
-          ;;
-      esac
+      repo_to_delete=$(jq ".[$n].name" $PANTHEON_UPSTREAM_REPOSITORIES | sed -e 's/"//g')
+      echo "$n. $repo_to_delete"
+      if [ "$repo_to_delete" != "$REPO" ] && [ "$repo_to_delete" != "$UPSTREAM" ]
+      then
+        case "$repo_to_delete" in
+          downstream-project-*|upstream-project-*)
+            delete_repository "$PR_CREATOR/$repo_to_delete" $DELETE_OUTPUT
+            ;;
+        esac
+      fi
     done
   fi
 
