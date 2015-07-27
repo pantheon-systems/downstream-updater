@@ -105,7 +105,7 @@ load git-utils
   # previous runs of the tool.
   #
   cd "$WORK_DIR"
-  run create-update-pr --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --force-cleanup --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
+  run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --force-cleanup --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
   [ "$status" -eq 10 ]
 
   # TODO: should we confirm that the downstream repository is unmodified?
@@ -133,7 +133,7 @@ load git-utils
   # Run the 'create-update-pr' script again, and confirm that a pari of PRs were created based on the new release
   #
   cd "$WORK_DIR"
-  run create-update-pr --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
+  run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
   [ "$status" -eq 0 ]
 
   # TODO: Should we confirm that the downstream repository contains the right modifications?
