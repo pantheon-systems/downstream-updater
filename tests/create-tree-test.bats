@@ -22,6 +22,14 @@ load git-utils
 
   create_tree "$WORK_DIR/$upstream_name" "$data" OVERWRITE
 
+  # Make sure that things end up nominally in the right place.
+  [ -d $WORK_DIR/$upstream_name ]
+  [ -f $WORK_DIR/$upstream_name/README.md ]
+  [ -d $WORK_DIR/$upstream_name/scripts ]
+  [ -f $WORK_DIR/$upstream_name/scripts/script.sh ]
+  [ -d $WORK_DIR/$upstream_name/tests ]
+  [ -f $WORK_DIR/$upstream_name/tests/unit.tests ]
+
   cd "$WORK_DIR/$upstream_name"
   git init
   git config user.email 'developers+pantheon-upstream@getpantheon.com'
