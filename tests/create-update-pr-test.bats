@@ -55,6 +55,14 @@ load git-utils
   cp -R "$WORK_DIR/$upstream_name" "$WORK_DIR/$downstream_name"
   rm -rf "$WORK_DIR/$downstream_name/.git"
 
+  cd "$WORK_DIR/$downstream_name"
+  git init
+  git config user.email 'developers+pantheon-upstream@getpantheon.com'
+  git config user.name 'Pantheon Upstream Bot'
+  git add .
+  git commit -m "Initial commit of test project $downstream_name"
+  git tag -a -m "Version 1.0.0" '1.0.0'
+
   data='
 .
 |-- README.md                 "This is a downstream repository created from the initial upstream"
@@ -67,11 +75,8 @@ load git-utils
   create_tree "$WORK_DIR/$downstream_name" "$data"
 
   cd "$WORK_DIR/$downstream_name"
-  git init
-  git config user.email 'developers+pantheon-upstream@getpantheon.com'
-  git config user.name 'Pantheon Upstream Bot'
   git add .
-  git commit -m "Initial commit of test project $downstream_name"
+  git commit -m "Make some local modifications in the downstream."
 
   # The two trees should be different.  The diff should show us the
   # difference in content between the README.md files.
@@ -86,10 +91,12 @@ load git-utils
   cd "$WORK_DIR/$upstream_name"
   hub create -d "Test 'upstream' repository created for downstream-updater tests." -h "https://github.com/pantheon-systems/downstream-updater"
   git push --set-upstream origin master
+  git push --tags
 
   cd "$WORK_DIR/$downstream_name"
   hub create -d "Test 'downstream' repository created for downstream-updater tests." -h "https://github.com/pantheon-systems/downstream-updater"
   git push --set-upstream origin master
+  git push --tags
 
   #
   # Run the 'create-update-pr' script, and confirm that no PR was created
@@ -98,7 +105,7 @@ load git-utils
   # previous runs of the tool.
   #
   cd "$WORK_DIR"
-  run create-update-pr --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --force-cleanup --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git"
+  run create-update-pr --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --force-cleanup --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
   [ "$status" -eq 10 ]
 
   # TODO: should we confirm that the downstream repository is unmodified?
@@ -126,7 +133,7 @@ load git-utils
   # Run the 'create-update-pr' script again, and confirm that a pari of PRs were created based on the new release
   #
   cd "$WORK_DIR"
-  run create-update-pr --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git"
+  run create-update-pr --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
   [ "$status" -eq 0 ]
 
   # TODO: Should we confirm that the downstream repository contains the right modifications?
