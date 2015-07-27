@@ -106,6 +106,9 @@ load git-utils
   #
   cd "$WORK_DIR"
   run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --force-cleanup --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
+  echo "------ Status of create-update-pr is $status --------------"
+  echo "$output"
+  echo "-----------------------------------------------------"
   [ "$status" -eq 10 ]
 
   # TODO: should we confirm that the downstream repository is unmodified?
@@ -134,6 +137,9 @@ load git-utils
   #
   cd "$WORK_DIR"
   run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
+  echo "------ Status of create-update-pr is $status --------------"
+  echo "$output"
+  echo "-----------------------------------------------------"
   [ "$status" -eq 0 ]
 
   # TODO: Should we confirm that the downstream repository contains the right modifications?
