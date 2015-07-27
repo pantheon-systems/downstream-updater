@@ -18,6 +18,7 @@ VERSION_PATTERN=
 REPO_BASE_BRANCH=master
 TOKEN_CACHE="$HOME/.config/pantheon-upstream/github-token"
 RELEASE_NODE=
+FORCE_CLEANUP=false
 
 debug=false
 DO=
@@ -47,6 +48,10 @@ while [ $# -gt 0 ] ; do
 
     -v|--verbose)
       VERBOSE=true
+      ;;
+
+    --force-cleanup)
+      FORCE_CLEANUP=true
       ;;
 
     # --github-token TOKEN: specify the encoded token to use with the GitHub API.
@@ -428,6 +433,15 @@ function find_pull_request_by_label() {
   curl --user-agent "$UA" "https://api.github.com/search/issues?q=+type:pr+state:open+label:$LABEL+repo:$REPO&sort=created&order=asc" --output "$OUTPUT_FILE" &>/dev/null
 }
 
+# GET /users/:username/repos
+function list_repositories() {
+  local TARGET_USER="$1"
+  local OUTPUT_FILE="$2"
+
+  curl --user-agent "$UA" "https://api.github.com/users/$TARGET_USER/repos" -H "Authorization: token $ENCODED_TOKEN" --output "$OUTPUT_FILE" &>/dev/null
+  aborterr "Could not list repositories for $TARGET_USER"
+}
+
 #
 # Create a repository owned by the authenticated user
 #
@@ -459,8 +473,9 @@ function create_repository() {
 #
 function delete_repository() {
   local TARGET_REPO="$1"
-  local OUTPUT_FILE="$5"
+  local OUTPUT_FILE="$2"
 
+  echo curl --user-agent "$UA" -H "Content-Type: application/json" -H "Authorization: token $ENCODED_TOKEN" -X DELETE "https://api.github.com/repos/$TARGET_REPO"
   curl --user-agent "$UA" -H "Content-Type: application/json" -H "Authorization: token $ENCODED_TOKEN" -X DELETE "https://api.github.com/repos/$TARGET_REPO" --output "$OUTPUT_FILE" &>/dev/null
 }
 
@@ -503,8 +518,10 @@ then
   # Authenticate with GitHub and create a token.  Note that this will prompt
   # the user for a password.
   AUTH_TOKEN_FILE="$TEMP_WORK/auth-token.txt"
-  curl https://api.github.com/authorizations --user "$PR_CREATOR" --data '{"scopes":["public_repo"],"note":"Token used to create a PR in the create-update-pr script."}' --output "$AUTH_TOKEN_FILE" &> /dev/null
+  curl https://api.github.com/authorizations --user "$PR_CREATOR" --data '{"scopes":["public_repo","delete_repo"],"note":"Token used to create a PR in the create-update-pr script."}' --output "$AUTH_TOKEN_FILE"
   check "Authenticated with GitHub" "Could not authenticate with GitHub"
+
+  cat $AUTH_TOKEN_FILE
 
   # Get the token data
   ENCODED_TOKEN="$(jq ".token" $AUTH_TOKEN_FILE | sed -e 's/"//g')"
@@ -514,6 +531,49 @@ then
   mkdir -p $(dirname "$TOKEN_CACHE")
   echo -n "$ENCODED_TOKEN" > "$TOKEN_CACHE"
   chmod 600 "$TOKEN_CACHE"
+fi
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#   C L E A N   U P
+#
+#   Get rid of junk repositories from prior test runs.
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+if $FORCE_CLEANUP
+then
+
+  PANTHEON_UPSTREAM_REPOSITORIES=/tmp/panuprepos.json
+  DELETE_OUTPUT=/tmp/panupdelete.json
+  list_repositories pantheon-upstream "$PANTHEON_UPSTREAM_REPOSITORIES"
+  #cat $PANTHEON_UPSTREAM_REPOSITORIES
+
+  REPO_COUNT=$(jq ". | length" $PANTHEON_UPSTREAM_REPOSITORIES)
+  #echo "There are $REPO_COUNT repositories"
+  FIRST_REPO=$(jq ".[0].name" $PANTHEON_UPSTREAM_REPOSITORIES)
+  #echo "The first repos name is $FIRST_REPO"
+  FIRST_REPO_INFO=$(jq ".[0]" $PANTHEON_UPSTREAM_REPOSITORIES)
+  #echo "The entire first repo record:"
+  #echo $FIRST_REPO_INFO
+
+  if [ -n "$REPO_COUNT" ]
+  then
+    for n in $(seq 0 $(($REPO_COUNT-1)))
+    do
+      repo_name=$(jq ".[$n].name" $PANTHEON_UPSTREAM_REPOSITORIES | sed -e 's/"//g')
+      echo "$n. $repo_name"
+      case "$repo_name" in
+        downstream-project-*|upstream-project-*)
+          echo "delete"
+          delete_repository "pantheon-upstream/$repo_name" $DELETE_OUTPUT
+          echo "response from delete:"
+          cat $DELETE_OUTPUT
+          ;;
+      esac
+    done
+  fi
+
 fi
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
