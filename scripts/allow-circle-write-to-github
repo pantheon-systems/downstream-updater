@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Force Circle CI to use the key we added in "SSH Permissions" (https://circleci.com/gh/pantheon-systems/downstream-updater/edit#ssh)
+# instead of the User Key that Circle would add in "Checkout SSH Keys" (https://circleci.com/gh/pantheon-systems/downstream-updater/edit#checkout)
+
+
+# Get the IdentityFile line for our general-purpose ssh key with write access
+write_access_id=$(grep '^IdentityFile /home/ubuntu/.ssh/' ssh-config | grep -v 'build_key' | grep -v 'id_circleci_github' | head -n 1)
+
+# Get the IdentityFile line used to access GitHub
+github_id=$(grep '^IdentityFile /home/ubuntu/.ssh/' ssh-config | grep 'id_circleci_github')
+
+# Overwrite the read-only key with the read/write key
+sed -i -e "s#$github_id#$write_access_id#" "$HOME/.ssh/config"
