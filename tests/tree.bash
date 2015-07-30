@@ -61,6 +61,10 @@ function create_tree() {
             echo "$filecontents"
           ) > "$BASE$SUBTREE/$filename"
           echo "create file $BASE$SUBTREE/$filename"
+          if [ "$(basename $filename .sh)" != "$filename" ]
+          then
+            chmod +x "$BASE$SUBTREE/$filename"
+          fi
         fi
       fi
   done <<< "$2"
