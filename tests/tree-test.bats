@@ -1,6 +1,27 @@
 #!/usr/bin/env bats
 
-load git-utils
+#
+# tree-test.bats
+#
+# This test file tests the functions in 'tree.bash'.
+# This file is only used by the bats tests, for test data generation.
+#
+
+# bats isolates us from our environment a little too much; try to find our project base directory
+PROJECT_BASE_DIR="$BATS_CWD"
+if [ ! -f "$PROJECT_BASE_DIR/scripts" ]
+then
+  if [ -f "$PROJECT_BASE_DIR/../scripts" ]
+  then
+    PROJECT_BASE_DIR="$PROJECT_BASE_DIR/.."
+  elif [ -f "$PROJECT_BASE_DIR/downstream-updater/scripts" ]
+  then
+    PROJECT_BASE_DIR="$PROJECT_BASE_DIR/downstream-updater"
+  fi
+fi
+
+# Bats-sanctioned BASH utilities
+load tree
 
 @test "test the create_tree utility function" {
 

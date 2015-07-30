@@ -16,7 +16,7 @@ fi
 # Set the $PATH so that we can call create-update-pr
 PATH="$PROJECT_BASE_DIR/scripts:$PATH"
 
-load git-utils
+load tree
 
 # To create the token:
 # curl https://api.github.com/authorizations --user "pantheon-upstream" --data '{"scopes":["public_repo","delete_repo"],"note":"Token used in unit tests of pantheon-systems/downstream-updater."}'
@@ -115,7 +115,7 @@ load git-utils
   # previous runs of the tool.
   #
   cd "$WORK_DIR"
-  run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
+  run create-update-pr --scripts-dir "$PROJECT_BASE_DIR/scripts" --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
   if [ "$status" != 10 ]
   then
     echo "------ Status of create-update-pr is $status --------------"
@@ -151,7 +151,7 @@ load git-utils
   # Run the 'create-update-pr' script again, and confirm that a pari of PRs were created based on the new release
   #
   cd "$WORK_DIR"
-  run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
+  run create-update-pr --scripts-dir "$PROJECT_BASE_DIR/scripts" --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
   if [ -n "$status" ]
   then
     echo "------ Status of create-update-pr is $status --------------"
