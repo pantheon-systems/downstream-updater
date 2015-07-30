@@ -1,7 +1,17 @@
 #!/usr/bin/env bats
 
-SELF_DIRNAME="`dirname -- "$0"`"
-PROJECT_BASE_DIR="`cd -P -- "$SELF_DIRNAME/.." && pwd -P`"
+# bats isolates us from our environment a little too much; try to find our project base directory
+PROJECT_BASE_DIR="`pwd -P`"
+if [ ! -f "$PROJECT_BASE_DIR/scripts" ]
+then
+  if [ -f "$PROJECT_BASE_DIR/../scripts" ]
+  then
+    PROJECT_BASE_DIR="$PROJECT_BASE_DIR/.."
+  elif [ -f "$PROJECT_BASE_DIR/downstream-updater/scripts" ]
+  then
+    PROJECT_BASE_DIR="$PROJECT_BASE_DIR/downstream-updater"
+  fi
+fi
 
 # Set the $PATH so that we can call create-update-pr
 PATH="$PROJECT_BASE_DIR/scripts:$PATH"
@@ -105,10 +115,15 @@ load git-utils
   # previous runs of the tool.
   #
   cd "$WORK_DIR"
-  run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --force-cleanup --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
-  echo "------ Status of create-update-pr is $status --------------"
-  echo "$output"
-  echo "-----------------------------------------------------"
+  run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
+  if [ "$status" != 10 ]
+  then
+    echo "------ Status of create-update-pr is $status --------------"
+    echo "$output"
+    echo "PROJECT_BASE_DIR is $PROJECT_BASE_DIR"
+    echo "PATH is $PATH"
+    echo "-----------------------------------------------------"
+  fi
   [ "$status" -eq 10 ]
 
   # TODO: should we confirm that the downstream repository is unmodified?
@@ -137,9 +152,14 @@ load git-utils
   #
   cd "$WORK_DIR"
   run create-update-pr --version-major 1 --github-token "$ENCODED_TOKEN" --pr-creator "pantheon-upstream" --repo "pantheon-upstream/$downstream_name" --upstream-url "git@github.com:pantheon-upstream/${upstream_name}.git" -v -d
-  echo "------ Status of create-update-pr is $status --------------"
-  echo "$output"
-  echo "-----------------------------------------------------"
+  if [ -n "$status" ]
+  then
+    echo "------ Status of create-update-pr is $status --------------"
+    echo "$output"
+    echo "PROJECT_BASE_DIR is $PROJECT_BASE_DIR"
+    echo "PATH is $PATH"
+    echo "-----------------------------------------------------"
+  fi
   [ "$status" -eq 0 ]
 
   # TODO: Should we confirm that the downstream repository contains the right modifications?

@@ -12,4 +12,4 @@ test:
   pre:
     - cd $HOME; ./downstream-updater/scripts/allow-circle-write-to-github
   override:
-    - PATH=$HOME/downstream-updater/scripts:$PATH bats tests
+    - bats tests
