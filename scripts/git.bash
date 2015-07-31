@@ -58,6 +58,12 @@ function squash_merge_preserving_last() {
 #
 # Squash all but the last commit on a branch.
 #
+# Usage:
+#
+#   cd $PROJECT
+#   git checkout "work"
+#   squash_all_but_last_commit "master" "squashed"
+#
 # Example:
 #
 #   work:                    (d) - (e) - (f) - (g)
@@ -87,26 +93,30 @@ function squash_all_but_last_commit() {
   # Find the most recent commit on the currenct branch "(g)"
   local HEAD_COMMIT=$(git rev-parse HEAD)
 
-  # Find the base commit "(c)"
-  local BASE_COMMIT=$(git merge-base HEAD $BASE_BRANCH/$WORK_BRANCH)
+  # Find the base commit "(c)" between the current branch
+  # ($WORK_BRANCH) and the base branch
+  local BASE_COMMIT=$(git merge-base HEAD $BASE_BRANCH)
 
   # Make a new branch that is a copy
   # of the current branch (create "interim" from "work")
   git checkout -B "$INTERIM_BRANCH" "$BASE_COMMIT"
 
+  # Add all of the commits from the work branch
+  git merge "$WORK_BRANCH"
+
   # Remove the last commit off of the
   # "interim" branch
-  git reset --hard HEAD~
+  git reset --hard 'HEAD~'
 
   # Make a new empty branch "squashed"
   # that branches from the same base commit, but
   # contains no other commits.
-  git checout "$BASE_COMMIT"
-  git checkout -B "$SQUASH_BRANCH"
+  git checkout -B "$SQUASH_BRANCH" "$BASE_COMMIT"
 
   # Squash-merge the "interim" branch into
   # the "squashed" branch.
   git merge --squash -m "Squash together all of the commits" "$INTERIM_BRANCH"
+  git commit -m "Squash together all of the commits"
 
   # Cherry-pick the last commit from the
   # work branch "(g)" onto the "squashed" branch

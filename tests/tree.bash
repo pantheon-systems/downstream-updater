@@ -13,11 +13,18 @@
 #
 #     create_tree base_dir "$data" OVERWRITE
 #
+#   or
+#
+#     create_tree base_dir "$data" "Commit comment"
+#
 function create_tree() {
   BASE="$1"
   if [ "x$3" == "xOVERWRITE" ]
   then
     rm -rf "$BASE"
+  elif [ -d "$BASE/.git" ]
+  then
+    COMMIT_COMMENT="$3"
   fi
   SUBTREE=""
   CURRENT_LEVEL=
@@ -65,7 +72,21 @@ function create_tree() {
           then
             chmod +x "$BASE$SUBTREE/$filename"
           fi
+          if [ -n "$COMMIT_COMMENT" ]
+          then
+            (
+              cd "$BASE$SUBTREE"
+              git add "$filename"
+            )
+          fi
         fi
       fi
   done <<< "$2"
+
+  # If a commit comment was supplied, then go ahead and commit the changes
+  cd "$BASE"
+  if [ -n "$COMMIT_COMMENT" ]
+  then
+    git commit -m "$COMMIT_COMMENT"
+  fi
 }
