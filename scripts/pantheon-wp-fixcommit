@@ -1,0 +1,39 @@
+#
+# Presuming that we have a WordPress site that has already been updated
+# through the WordPress admin site and committed through the dashboard,
+# this script will fix up the commits to get rid of the "initial commit"
+# so that we can just push this back up to the upstream repository,
+# pantheon-systems/WordPress.
+#
+# Instructions:
+#
+#   1. Log in to Pantheon CUSTOMER account.  DO NOT use employee account.
+#   2. Create a new site; name it something like “WordPress [NEW VERSION]”.
+#   3. Clone the site locally using the git connection info.
+#   4. Go to the updates page and click on “update”
+#       - Is WordPress asking for ftp credentials?  Make sure you are in
+#         SFTP mode with a customer account; don’t use the employee account!
+#       - Once you update, WP will show you a page about the update.
+#         This is a lie; it has already done the update.
+#   5. Go back to the updates page and update the themes, if there are any
+#         that need to be done.
+#   6. Go back to your dashboard and commit the changes from the update
+#   7. git pull origin master
+#
+# Then run this script.
+#
+WP_SITE="$1"
+
+WP_VERSION=$(terminus wp --site="$WP_SITE" core version | tail -n 1)
+
+git commit --amend --author="Pantheon Automation <bot@getpantheon.com>"
+git checkout -b "wp$WP_VERSION" HEAD~2
+git cherry-pick master
+git remote add upstream git@github.com:pantheon-systems/WordPress.git
+git checkout master
+git reset HEAD^^
+git reset --hard
+git merge "wp$WP_VERSION"
+
+echo "All done with update.  To deploy, run:"
+echo git push upstream master
