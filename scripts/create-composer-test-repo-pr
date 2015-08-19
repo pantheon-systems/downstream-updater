@@ -270,6 +270,10 @@ verbose_message "REPO is $REPO"
 verbose_message "REPO_OWNER is $REPO_OWNER"
 verbose_message "REPO_SHORT_NAME is $REPO_SHORT_NAME"
 
+verbose_message "UPSTREAM is $UPSTREAM"
+verbose_message "UPSTREAM_OWNER is $UPSTREAM_OWNER"
+verbose_message "UPSTREAM_SHORT_NAME is $UPSTREAM_SHORT_NAME"
+
 verbose_message "FORKED REPO URL is $FORKED_REPO_URL"
 verbose_message "FORKED_REPO is $FORKED_REPO"
 verbose_message "FORK_OWNER is $FORK_OWNER"
@@ -446,6 +450,7 @@ UPDATE_WORKING_BRANCH="update-$availableVersion"
 # Set up variables that we will use to populate the PR we create
 TITLE="Update to $UPSTREAM $availableVersion"
 BODY=
+UPDATE_PR_BODY=
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
@@ -514,41 +519,163 @@ fi
 $DO git push origin "$UPDATE_WORKING_BRANCH"
 check "Pushed $UPDATE_WORKING_BRANCH back up to origin of $FORKED_REPO" "Could not push $UPDATE_WORKING_BRANCH to origin of $FORKED_REPO"
 
+REPO=
+REPO_SHORT_NAME=
+availableVersion=
+UPDATE_WORKING_BRANCH=
+
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
-#   C R E A T E   P U L L   R E Q U E S T
+#   C R E A T E   B R A N C H   O N   U P D A T E S   R E P O
 #
-#   Make a pull request for the desired update.  The actual tests
-#   will run against a PR in another "updates" repository; we do not
-#   want a circle.yml or .travis.yml in an upstream repository, because
-#   it would get in the way of downstream users who wanted their own
-#   test files at the root of their repositories.
+#   We do not have a .travis.yml or circle.yml in the repo that we
+#   are updating, becasue we do not want this file to be inherited
+#   by other repositories that use it as an upstream.
+#
+#   What we do instead is use a separate "update" repository that
+#   uses composer to install and test the primary repository.
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+if [ -n "$UPDATE_REPO" ]
+then
+
+  # Clone the updates repo, or update it if there is already a
+  # local working copy
+
+  cd ..
+
+  if [ ! -d "$UPDATE_REPO_SHORT_NAME" ] ; then
+    echo "### Creating fresh clone of $UPDATE_REPO_SHORT_NAME"
+    git clone $UPDATE_REPO_URL $UPDATE_REPO_SHORT_NAME
+    check "Checked out $UPDATE_REPO_URL" "Failed to check out $UPDATE_REPO_URL"
+    cd $UPDATE_REPO_SHORT_NAME
+  else
+    echo "### Updating $UPDATE_REPO_SHORT_NAME to HEAD of master in github"
+    cd $UPDATE_REPO_SHORT_NAME
+    git checkout master
+    aborterr "Could not switch to master"
+    git pull origin master
+    aborterr "Could not pull master of $UPDATE_REPO_URL"
+  fi
+
+  # Make a branch to work on.  We'll use the same branch name that
+  # we are using in the main REPO.
+
+  git checkout "$UPDATE_WORKING_BRANCH"
+  if [ $? != 0 ]
+  then
+    git checkout -b "$UPDATE_WORKING_BRANCH" master
+  fi
+
+  # Now we have a few changes to make to the composer.json file
+  # of our updates repository.
+  #
+  # We want to make the following changes:
+  #
+  # "repositories": [
+  # {
+  #   "type": "package",
+  #   "package": {
+  #       "name": "pantheon-systems/drops-7", <-- (1) GIVE A TEMPORARY NAME
+  #       "type": "drupal-core",
+  #       "version": "7.37", <-- (2) UPDATE TO $availableVersion
+  #       "source": {
+  #           "url": "https://github.com/pantheon-systems/drops-7.git", <-- (3) Point at $FORKED_REPO_URL
+  #           "type": "git",
+  #           "reference": "master" <-- (4) Change to $UPDATE_WORKING_BRANCH (most important)
+  #       },
+  #       ...
+  #    }
+  #    ..
+  # "require": {
+  #      "pantheon-systems/drops-7": "7.*", <-- (5) MATCH TEMPORARY NAME USED ABOVE in "1"
+  #
+  # Our important assumption is that the $UPDATE_REPO provided must
+  # be specifically prepared for for the $REPO being updated.  We therefore
+  # are going to assume that the "name": entry always matches "/$REPO_SHORT_NAME".
+  #
+  # TODO: It might be kind of cool to write the entire "package" entry based
+  # on info in the composer.json in the $REPO being updated, if said repo is
+  # in packagist (in which case the $UPDATE_REPO does not need a "package"
+  # entry in the "repositories" section).  For now, though, we will presume
+  # that the updates repository has a package entry prepared and ready for
+  # us to modify.
+  #
+  TEMPORARY_UPDATES_OWNER=pantheon-updates
+
+  # (1) Replace "name": "pantheon-systems/drops-7" with our TEMPORARY_UPDATES_OWNER
+  # There will only be one match for this particular pattern.
+  sed -i '' -e 's#\("name": "\)\([^/]*\)\(/'$REPO_SHORT_NAME'"\)#\1'$TEMPORARY_UPDATES_OWNER'\3#' composer.json
+
+  # (2) Replace "version": with our version
+  # We must be careful to not change other similar patterns elsewhere in the file,
+  # so we limit the scope of where our sed expression will operate
+  sed -i '' -e '/name.*'$REPO_SHORT_NAME'/,/version/ s#\("version": "\)\([^"]*\)#\1'$availableVersion'#' composer.json
+
+  # (3) Replace "url": with our url. Be careful to limit where we do our replacements.
+  sed -i '' -e '/name.*'$REPO_SHORT_NAME'/,/url/ s#\("url": "\)\([^"]*\)#\1'$FORKED_REPO_URL'#' composer.json
+
+  # (4) Replace "master" with our working branch name. Be careful to limit where we do our replacements.
+  sed -i '' -e '/name.*'$REPO_SHORT_NAME'/,/reference/ s#master#'$UPDATE_WORKING_BRANCH'#' composer.json
+
+  # (5) Replace "pantheon-systems/drops-7": with our TEMPORARY_UPDATES_OWNER.
+  # There will only be one match for this particular pattern.
+  sed -i '' -e 's#\("[^/]*\)\(/'$REPO_SHORT_NAME'": \)#"'$TEMPORARY_UPDATES_OWNER'\2#' composer.json
+
+  # Run 'composer update' to pull in the branch we referenced in the changes above
+  composer update
+  check "Successfully ran 'composer update' on $UPDATE_REPO to point at $UPDATE_WORKING_BRANCH of $FORKED_REPO" "'composer update' failed on $UPDATE_REPO"
+
+  # Commit to the new branch
+  git add composer.json
+  git add composer.lock
+  git commit -m "Test $REPO $availableVersion"
+  aborterr "Could not commit change to composer.json in $UPDATE_REPO"
+
+  git push origin "$UPDATE_WORKING_BRANCH"
+  check "Pushed $UPDATE_WORKING_BRANCH back up to origin of $UPDATE_REPO" "Could not push $UPDATE_WORKING_BRANCH to origin of $UPDATE_REPO"
+fi
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#   C R E A T E   P U L L   R E Q U E S T S
+#
+#   Make a pair of pull requests so that the new branch can be tested.
 #
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 # Check to see if there is already a PR for this branch.
 
-FIND_REPO_FILE="$TEMP_WORK/find-pr-in-repo.json"
-
-find_pull_request_by_title "$REPO" "$TITLE" "$FIND_REPO_FILE"
-
-NEW_PR_NUMBER="$(jq ".items[0].number" "$FIND_REPO_FILE" | sed -e 's/"//g')"
-
-# If the PR was not found, then create it.
-if [ -z "$NEW_PR_NUMBER" ] || [ "$NEW_PR_NUMBER" == "null" ]
+if [ -n "$UPDATE_REPO" ]
 then
-  NEW_REPO_PR_INFO_FILE="$TEMP_WORK/new-pr.json"
 
-  BODY="This PR was created by the create-update-pr script.\n\n$BODY"
+  FIND_UPDATE_REPO_FILE="$TEMP_WORK/find-pr-in-update-repo.json"
 
-  # Create the PR on REPO
-  create_pull_request "$REPO" "$TITLE" "$BODY" "$REPO_BASE_BRANCH" "$UPDATE_WORKING_BRANCH" "$NEW_REPO_PR_INFO_FILE"
+  find_pull_request_by_title "$UPDATE_REPO" "$TITLE" "$FIND_UPDATE_REPO_FILE"
 
-  # Get the PR number for the new PR
-  NEW_PR_NUMBER="$(jq ".number" "$NEW_REPO_PR_INFO_FILE" | sed -e 's/"//g')"
+  NEW_UPDATE_PR_NUMBER="$(jq ".items[0].number" "$FIND_UPDATE_REPO_FILE" | sed -e 's/"//g')"
 
-  # Add an "automation" label to the update PR
-  add_label_to_issue "$REPO" "$NEW_PR_NUMBER" "automation" "fad8c7"
+
+  # If the PR was not found, then create it.
+  if [ -z "$NEW_UPDATE_PR_NUMBER" ] || [ "$NEW_UPDATE_PR_NUMBER" == "null" ]
+  then
+
+    NEW_UPDATE_PR_INFO_FILE="$TEMP_WORK/new-update-pr.json"
+
+    UPDATE_PR_BODY="This PR was created specifically for the purpose of testing $REPO#$NEW_PR_NUMBER\n\n$UPDATE_PR_BODY\n\n**IMPORTANT NOTE:** Once complete, this PR should be *closed*, not merged."
+
+    # Create the PR on UPDATES
+    create_pull_request "$UPDATE_REPO" "$TITLE" "$UPDATE_PR_BODY" "master" "$UPDATE_WORKING_BRANCH" "$NEW_UPDATE_PR_INFO_FILE"
+
+    # Get the PR number for the new update PR
+    NEW_UPDATE_PR_NUMBER="$(jq ".number" "$NEW_UPDATE_PR_INFO_FILE" | sed -e 's/"//g')"
+
+    # Add an "automation" label to the update PR
+    add_label_to_issue "$UPDATE_REPO" "$NEW_UPDATE_PR_NUMBER" "automation" "fad8c7"
+
+  fi
+
 fi
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::

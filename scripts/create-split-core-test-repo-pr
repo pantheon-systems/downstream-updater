@@ -1,0 +1,318 @@
+#!/bin/bash
+
+#
+# Update greg-1-anderson/updates-8 to test updated branch in greg-1-anderson/drupal-core
+#
+# STRATEGY:
+#
+#    We have run create-update-pr on drops-8, so we have a branch update-8.0.0-beta##
+#
+#       $ cd ~/tmp/ga-updates-test
+#       $ ~/pantheon/downstream-updater/scripts/create-update-pr --repo greg-1-anderson/drops-8
+#
+#    Merge the update-8.0.0-beta## branch into the branch 8.0.x
+#      (commits go into 'dev' before branch is tested)
+#
+#    Create a new tag on drops-8 for the new release 8.0.0-beta##
+#      (tag for new release appears before branch is tested)
+#
+#    Update the drops-8 split core 8.0.x branch
+#
+#    Make a new tag on the drops-8 split core 8.0.x branch called 8.0.0-beta##
+#      (force push this if we are re-testing after a previous failed test of the same release)
+#
+#    Insure that packagist can see this tag
+#      (if we use a vcs repository in updates-8, then we don't need to worry about this?)
+#
+#    Make a new branch on updates-8 for testing
+#
+#    Run 'composer update' on the branch
+#
+#    Commit the composer.lock and push the branch; make a PR to run the tests
+#
+#    If the tests pass, then we can (once a human confirms it is okay):
+#
+#      - Merge the updates-8 testing branch into the master branch
+#
+#      - On drops-8, merge the branch update-8.0.0-beta## into master
+#
+#      - Do the "Pantheon Automation" shuffle
+#
+#      - Push the merged branch up to github, which will sends out the release
+#
+
+TOKEN_CACHE="$HOME/.config/pantheon-upstream/github-token"
+
+# TODO: The split core repo is identified in the composer.json of the update repo.
+# TODO: REPO is identified in the settings of the split core repo.
+REPO=greg-1-anderson/drops-8
+SPLIT_CORE_REPO=greg-1-anderson/drupal-core
+UPDATE_REPO=greg-1-anderson/updates-8
+
+AVAILABLE_VERSION=8.0.0-beta14
+
+UPDATE_WORKING_BRANCH=update-$AVAILABLE_VERSION
+
+
+# Given REPO in the form "pantheon-systems/drops-8", set:
+#   REPO_URL: "git@github.com:pantheon-systems/drops-8"
+#   REPO_OWNER: "pantheon-systems"
+#   REPO_SHORT_NAME: "drops-8"
+REPO_URL=git@github.com:${REPO}.git
+REPO_OWNER=$(echo $REPO | sed -e 's#/[^/]*##')
+REPO_SHORT_NAME=$(echo $REPO | sed -e 's#[^/]*/##')
+REPO_BASE_BRANCH=master
+
+SPLIT_CORE_REPO_URL=git@github.com:${SPLIT_CORE_REPO}.git
+SPLIT_CORE_REPO_OWNER=$(echo $SPLIT_CORE_REPO | sed -e 's#/[^/]*##')
+SPLIT_CORE_REPO_SHORT_NAME=$(echo $SPLIT_CORE_REPO | sed -e 's#[^/]*/##')
+
+UPDATE_REPO_URL=git@github.com:${UPDATE_REPO}.git
+UPDATE_REPO_OWNER=$(echo $UPDATE_REPO | sed -e 's#/[^/]*##')
+UPDATE_REPO_SHORT_NAME=$(echo $UPDATE_REPO | sed -e 's#[^/]*/##')
+
+
+# If the user did not specify the --version-major,
+# then take the last character from the $REPO
+if [ -z "$VERSION_MAJOR" ]
+then
+  VERSION_MAJOR="${REPO:$((${#REPO}-1))}"
+fi
+
+if [ -z "$DEV_BRANCH" ]
+then
+  DEV_BRANCH="$VERSION_MAJOR.0.x"
+fi
+
+# Set the scripts dir if it was not explicitly given to us
+if [ -z "$SCRIPTS_DIR" ]
+then
+  SELF_DIRNAME="`dirname -- "$0"`"
+  SCRIPTS_DIR="`cd -P -- "$SELF_DIRNAME/../scripts" && pwd -P`"
+fi
+
+
+# Set up a tmp directory to work in
+TEMP_WORK=$(mktemp -d /tmp/update-script.XXX)
+
+TITLE="Test $REPO $AVAILABLE_VERSION"
+
+BODY="Test $REPO update to $AVAILABLE_VERSION using $SPLIT_CORE_REPO"
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#   B A S H   F U N C T I O N S
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+source "$SCRIPTS_DIR/utils.bash"
+source "$SCRIPTS_DIR/git.bash"
+source "$SCRIPTS_DIR/github.bash"
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#   C L O N E   R E P O S I T O R Y   T O   U P D A T E
+#
+#   Create a local repository; clone it if it does not already exist,
+#   or just update the local working copy if it does.
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+clone_or_update $REPO $REPO_BASE_BRANCH
+clone_or_update $SPLIT_CORE_REPO master
+clone_or_update $UPDATE_REPO master
+
+set -x
+
+#
+# Merge the $AVAILABLE_VERSION branch into the $DEV_BRANCH
+# and create a tag $AVAILABLE_VERSION
+#
+cd $REPO_SHORT_NAME
+git fetch origin
+aborterr "Could not fetch origin from $REPO"
+git checkout $DEV_BRANCH
+if [ $? != 0 ]
+then
+  git checkout -b $DEV_BRANCH origin/$DEV_BRANCH
+  aborterr "Could not check out origin/$DEV_BRANCH"
+fi
+
+git merge -m "Merge branch '$UPDATE_WORKING_BRANCH' into $DEV_BRANCH" $UPDATE_WORKING_BRANCH
+aborterr "Could not merge branch $UPDATE_WORKING_BRANCH in $REPO"
+git push origin $DEV_BRANCH
+aborterr "Could not push origin in $REPO"
+
+git tag -m "$AVAILABLE_VERSION release from upstream" -a $AVAILABLE_VERSION
+git push --tags
+
+cd ..
+
+
+#
+# Update the split-core repo
+#
+cd $SPLIT_CORE_REPO_SHORT_NAME
+
+
+# If the 'upstream' directory does not exist, then
+# run subtree-split init to set things up.
+if [ ! -d upstream ]
+then
+  ./subtree-split init
+fi
+
+# Bring the split-core's upstream repo up to date
+./subtree-split fetch
+
+# Push the 8.0.x branch up so it's ready for testing.
+./subtree-split push branch $DEV_BRANCH
+
+# Push the 8.0.0-beta## tag up as well
+./subtree-split push tag $AVAILABLE_VERSION
+
+cd ..
+
+#
+# Make a new branch on the updates-8 repo
+#
+cd $UPDATE_REPO_SHORT_NAME
+
+git checkout -B $UPDATE_WORKING_BRANCH
+aborterr "Could not create branch $UPDATE_WORKING_BRANCH in $UPDATE_REPO"
+composer update
+aborterr "Could not successfully run composer update on $UPDATE_REPO"
+
+git add .
+git commit -m "Update to test $AVAILABLE_VERSION"
+aborterr "Could not commit changes to $UPDATE_REPO"
+
+git push origin $UPDATE_WORKING_BRANCH
+aborterr "Could not push $UPDATE_WORKING_BRANCH to origin in $UPDATE_REPO"
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#   A U T H E N T I C A T E   W I T H   G I T H U B
+#
+#   If a github token was not provided, then create one using the
+#   credentials passed via --pr-creator.
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+# If no token was provided, then create one.
+if [ -z "$ENCODED_TOKEN" ] && [ -f "$TOKEN_CACHE" ]
+then
+  ENCODED_TOKEN=$(cat $TOKEN_CACHE)
+fi
+
+if [ -z "$ENCODED_TOKEN" ]
+then
+  echo "--github-token not specified; creating a new token with account $PR_CREATOR.  This will require you to enter your password to grant this script permission to access your public repositories."
+  # Authenticate with GitHub and create a token.  Note that this will prompt
+  # the user for a password.
+  AUTH_TOKEN_FILE="$TEMP_WORK/auth-token.txt"
+  curl https://api.github.com/authorizations --user "$PR_CREATOR" --data '{"scopes":["public_repo","delete_repo"],"note":"Token used to create a PR in the create-update-pr script."}' --output "$AUTH_TOKEN_FILE"
+  check "Authenticated with GitHub" "Could not authenticate with GitHub"
+
+  cat $AUTH_TOKEN_FILE
+
+  # Get the token data
+  ENCODED_TOKEN="$(jq ".token" $AUTH_TOKEN_FILE | sed -e 's/"//g')"
+
+  # Cache the OAuth token so that we do not need to prompt for a password
+  # on successive requests.
+  mkdir -p $(dirname "$TOKEN_CACHE")
+  echo -n "$ENCODED_TOKEN" > "$TOKEN_CACHE"
+  chmod 600 "$TOKEN_CACHE"
+fi
+
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#   C R E A T E   P U L L   R E Q U E S T
+#
+#   Make a pull request for the desired update.  The actual tests
+#   will run against a PR in another "updates" repository; we do not
+#   want a circle.yml or .travis.yml in an upstream repository, because
+#   it would get in the way of downstream users who wanted their own
+#   test files at the root of their repositories.
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+# Check to see if there is already a PR for this branch.
+
+FIND_REPO_FILE="$TEMP_WORK/find-pr-in-repo.json"
+
+find_pull_request_by_title "$UPDATE_REPO" "$TITLE" "$FIND_REPO_FILE"
+
+NEW_PR_NUMBER="$(jq ".items[0].number" "$FIND_REPO_FILE" | sed -e 's/"//g')"
+
+# If the PR was not found, then create it.
+if [ -z "$NEW_PR_NUMBER" ] || [ "$NEW_PR_NUMBER" == "null" ]
+then
+  NEW_REPO_PR_INFO_FILE="$TEMP_WORK/new-pr.json"
+
+  BODY="This PR was created by the create-split-core-test-repo-pr script.\n\n$BODY"
+
+  # Create the PR on REPO
+  create_pull_request "$UPDATE_REPO" "$TITLE" "$BODY" "$REPO_BASE_BRANCH" "$UPDATE_WORKING_BRANCH" "$NEW_REPO_PR_INFO_FILE"
+
+  # Get the PR number for the new PR
+  NEW_PR_NUMBER="$(jq ".number" "$NEW_REPO_PR_INFO_FILE" | sed -e 's/"//g')"
+
+  # Add an "automation" label to the update PR
+  add_label_to_issue "$UPDATE_REPO" "$NEW_PR_NUMBER" "automation" "fad8c7"
+fi
+
+
+
+exit 0
+
+#
+# Make an update PR in pantheon-systems/drops-8
+#
+cd ~/tmp/updates-test
+~/pantheon/downstream-updater/scripts/create-update-pr --repo pantheon-systems/drops-8
+
+# Make an update PR in greg-1-anderson/drops-8
+cd ~/tmp/ga-updates-test
+~/pantheon/downstream-updater/scripts/create-update-pr --repo greg-1-anderson/drops-8
+
+# Undo!
+cd ~/tmp/ga-updates-test/drops-8
+git reset 728ddaaf69b566ebee93b489fbca0600600ca436
+git clean --force
+git push --force
+
+#
+# Make an updated branch in greg-1-anderson/drupal-core (drops-8 split core)
+#
+cd ~/tmp/ga-updates-test
+
+
+# Clone the repository
+git clone https://github.com/greg-1-anderson/drupal-core.git
+cd drupal-core
+
+# Initialize the upstream repository
+./subtree-split init
+Updating the respository
+
+./subtree-split fetch
+Publishing the split repository
+
+# Publish the 8.0.x branch
+./subtree-split push branch 8.0.x
+
+# Publish the 8.0.0-beta2 tag
+./subtree-split push tag 8.0.0-beta2
+
+
+cd ~/tmp/ga-updates-test
+
+
+# Clone the repository
+git clone https://github.com/greg-1-anderson/updates-8.git
+cd updates-8
+
+# update-8.0.0-beta14

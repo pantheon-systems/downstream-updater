@@ -8,6 +8,7 @@ FORK_OWNER=
 REPO=pantheon-systems/drops-7
 UPSTREAM_URL=http://git.drupal.org/project/drupal.git
 UPDATE_REPO=
+LABEL=shipit
 BOT_NAME="Pantheon Upstream"
 BOT_EMAIL="developers+pantheon-upstream@getpantheon.com"
 TOOL_NAME="pantheon-systems/donwstream-updater"
@@ -101,6 +102,13 @@ while [ $# -gt 0 ] ; do
     # be organization/project.
     --update)
       UPDATE_REPO="$1"
+      shift
+      ;;
+
+    # --label SHIPIT: specify the GitHub label identifying PRs to automatically
+    # merge with the new release being tested.
+    --label)
+      LABEL="$1"
       shift
       ;;
 
@@ -270,6 +278,10 @@ verbose_message "REPO is $REPO"
 verbose_message "REPO_OWNER is $REPO_OWNER"
 verbose_message "REPO_SHORT_NAME is $REPO_SHORT_NAME"
 
+verbose_message "UPSTREAM is $UPSTREAM"
+verbose_message "UPSTREAM_OWNER is $UPSTREAM_OWNER"
+verbose_message "UPSTREAM_SHORT_NAME is $UPSTREAM_SHORT_NAME"
+
 verbose_message "FORKED REPO URL is $FORKED_REPO_URL"
 verbose_message "FORKED_REPO is $FORKED_REPO"
 verbose_message "FORK_OWNER is $FORK_OWNER"
@@ -312,49 +324,6 @@ fi
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
-#   C L E A N   U P
-#
-#   Get rid of junk repositories from prior test runs.
-#
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-if $FORCE_CLEANUP
-then
-
-  PANTHEON_UPSTREAM_REPOSITORIES=/tmp/panuprepos.json
-  DELETE_OUTPUT=/tmp/panupdelete.json
-  list_repositories "$PR_CREATOR" "$PANTHEON_UPSTREAM_REPOSITORIES"
-  #cat $PANTHEON_UPSTREAM_REPOSITORIES
-
-  REPO_COUNT=$(jq ". | length" $PANTHEON_UPSTREAM_REPOSITORIES)
-  #echo "There are $REPO_COUNT repositories"
-  FIRST_REPO=$(jq ".[0].name" $PANTHEON_UPSTREAM_REPOSITORIES)
-  #echo "The first repos name is $FIRST_REPO"
-  FIRST_REPO_INFO=$(jq ".[0]" $PANTHEON_UPSTREAM_REPOSITORIES)
-  #echo "The entire first repo record:"
-  #echo $FIRST_REPO_INFO
-
-  if [ -n "$REPO_COUNT" ]
-  then
-    for n in $(seq 0 $(($REPO_COUNT-1)))
-    do
-      repo_to_delete=$(jq ".[$n].name" $PANTHEON_UPSTREAM_REPOSITORIES | sed -e 's/"//g')
-      echo "$n. $repo_to_delete"
-      if [ "$repo_to_delete" != "$REPO" ] && [ "$repo_to_delete" != "$UPSTREAM" ]
-      then
-        case "$repo_to_delete" in
-          downstream-project-*|upstream-project-*)
-            delete_repository "$PR_CREATOR/$repo_to_delete" $DELETE_OUTPUT
-            ;;
-        esac
-      fi
-    done
-  fi
-
-fi
-
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-#
 #   C L O N E   R E P O S I T O R Y   T O   U P D A T E
 #
 #   Create a local repository; clone it if it does not already exist,
@@ -389,167 +358,122 @@ else
   aborterr "Could not pull $REPO_BASE_BRANCH from remote $REMOTE of $REPO"
 fi
 
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-#
-#   F I N D   U P S T R E A M   R E L E A S E S
-#
-#   Look for new releases in the specified upstream repository.
-#   Create a new branch to hold the changes, if it has not already
-#   been made.
-#
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-#
-# We are going to look for tags or a certain format.
-#
-# For Drupal 7:
-#
-#   7.38
-#   7.37
-#   7.36
-#     ... etc
-#
-# For Drupal 8:
-#
-#   8.0.0-beta12
-#   8.0.0-beta11
-#   8.0.0-beta10
-#     ... etc
-#
-# To find the next available tag, we first decide on what the invariant
-# part of the tag should be, such as "7." for Drupal 7, or "8.0.0-beta"
-# for Drupal 8.  We need to change this decision when there is a major
-# change in the schema, e.g. when Drupal 8 moves to "8.0.0-rc1" or "8.1.0-alpha1";
-# these newer releases will not be found or noticed until we make this
-# update manually.
-#
-# Once we know the invariant part, we can find all tags that start with
-# that string, remove that string from the beginning of each line, and then
-# use `sort -n` to do a numeric sort, so that "12" is considered greater
-# than "2".  This will give us the most recent available tag.
-#
-INVARIANT_PART="${VERSION_MAJOR}.${VERSION_PATTERN}"
-
-# List all of the remote tags that match the invariant part of the tag,
-# and then sort the remaining part of the string numerically.  The greatest
-# of these becomes "$availableMinor".
-availableMinor="$(git ls-remote --tags "$UPSTREAM_URL" | sed -e 's|refs/tags/||' | cut -f2 | grep "^$INVARIANT_PART[a-z0-9.-]*\$" | sed -e "s|$INVARIANT_PART||" | sort -n | tail -n 1)"
-aborterr "Could not check for the most recent available version"
-availableVersion="$INVARIANT_PART$availableMinor"
-
-# Find the last commit hash that is part of the specified available version.
-availableHash=$(git ls-remote --tags "$UPSTREAM_URL" | grep "refs/tags/$availableVersion\$" | cut -f1)
-aborterr "Could not find the hash for the most recent available version"
-# Create a working branch name, e.g. "update-7.38"
-UPDATE_WORKING_BRANCH="update-$availableVersion"
-
-# Set up variables that we will use to populate the PR we create
-TITLE="Update to $UPSTREAM $availableVersion"
-BODY=
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
-#   M E R G E    U P S T R E A M    R E L E A S E
+#   A U T O - M E R G E   P U L L   R E Q U E S T S
 #
-#   Merge the upstream release into the repository we are updating.
+#   Find pull requests that are labeled (e.g. "shipit") for automatic
+#   inclusion in the next release.
 #
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-NEED_UPSTTREAM_MERGE=false
+PR_LIST_FILE="$TEMP_WORK/pulls.json"
 
-# If the most recent available version in the upstream repository already
-# exists in the repository we are updating, then we do not need to merge
-# the available upstream release in. Same thing if we already have a tag
-# of the same name.
-
-commithash=$(git log --grep="$availableVersion" --since=1.month --pretty=format:"%h")
-hastag=$(git tag -l | grep $availableVersion)
-
-if [ -n "$commithash" ] || [ -n "$hastag" ]
+#
+# Search for PRs that are labeled for inclusion in this release.
+# The label to search for should be in $LABEL.
+#
+if [ -n "$LABEL" ]
 then
-  echo "### $FORKED_REPO already has $availableVersion"
-  for c in $commithash ; do echo && git log -1 $c ; done
-  exit $ERROR_ALREADY_UP_TO_DATE
-else
-  hasBranch=$(git branch | grep $UPDATE_WORKING_BRANCH)
-  if [ -n "$hasBranch" ]
+  # Search for PRs that are labeled with "$LABEL" (e.g. "shipit")
+  find_pull_request_by_label "$REPO" "$LABEL" "$PR_LIST_FILE"
+
+  # Skip the PR merge if the GitHub API fails us for some reason
+  if [ -s "$PR_LIST_FILE" ]
   then
-    echo "### $FORKED_REPO already has a branch $UPDATE_WORKING_BRANCH"
-    git checkout $UPDATE_WORKING_BRANCH
-  else
-    echo "### $FORKED_REPO must be updated to $availableVersion"
+    # Find out how many results there are by counting '.items'
+    PR_COUNT=$(jq ".items | length" $PR_LIST_FILE)
 
-    # Create our working branch
-    $DO git checkout -B $UPDATE_WORKING_BRANCH
-    aborterr "Could not create branch '$UPDATE_WORKING_BRANCH'"
-    NEED_UPSTTREAM_MERGE=true
+    # Get info for each PR
+    NEED_PR_HEADER_IN_BODY=true
+    if [ -n "$PR_COUNT" ]
+    then
+      for PR in $(seq 0 $((PR_COUNT-1)))
+      do
+        # Get the URL for the Nth PR
+        PR_URL="$(jq ".items[$PR].pull_request.url" $PR_LIST_FILE | sed -e 's/"//g')"
+        # Get the ID for the Nth PR
+        PR_NUMBER="$(jq ".items[$PR].number" $PR_LIST_FILE)"
+
+        # Download info about this one PR
+        PR_INFO_FILE="$TEMP_WORK/pull-$PR_NUMBER.json"
+        curl --user-agent "$UA" "$PR_URL" --output "$PR_INFO_FILE" &> /dev/null
+
+        # If we cannot get any info on this PR, then we'll silently skip it.
+        if [ -s "$PR_INFO_FILE" ]
+        then
+
+          # Get the name of the repo and branch the PR was created from.
+          PR_BRANCH="$(jq ".head.ref" $PR_INFO_FILE | sed -e 's/"//g')"
+          PR_REPO="$(jq ".head.repo.clone_url" $PR_INFO_FILE | sed -e 's/"//g')"
+          PR_REPO_OWNER="$(jq ".head.repo.owner.login" $PR_INFO_FILE | sed -e 's/"//g')"
+
+          # Get the name of the branch the PR was split off from
+          PR_BASE_BRANCH="$(jq ".base.ref" $PR_INFO_FILE | sed -e 's/"//g')"
+
+          # TODO: The PR base branch must be the same as the update
+          # base branch.  Otherwise, we should skip this PR and somehow
+          # notify that it was not automatically included
+          # (write a comment into the PR?)
+
+          PR_WORKING_BRANCH="${PR_REPO_OWNER}-${PR_BRANCH}"
+
+          # Fetch some values to place in the commit comment.
+          PR_GITHUB_URL="$(jq ".html_url" $PR_INFO_FILE | sed -e 's/"//g')"
+          PR_TITLE="$(jq ".title" $PR_INFO_FILE | sed -e 's/"//g')"
+
+          COMMIT_COMMENT_FILE="$TEMP_WORK/commit-comment-$PR_NUMBER.txt"
+
+          cat << __EOF__ > "$COMMIT_COMMENT_FILE"
+#$PR_NUMBER: $PR_TITLE [$LABEL]
+
+Including pull request $PR_GITHUB_URL in branch $UPDATE_WORKING_BRANCH.
+__EOF__
+
+          # Check to see if there is already a commit on this branch that
+          # contains "#$PR_NUMBER: ", and skip the merge if found.
+          git checkout "$UPDATE_WORKING_BRANCH"
+          commithash=$(git log --grep="#$PR_NUMBER:" --pretty=format:"%h")
+
+          if [ -n "$commithash" ]
+          then
+            echo "Already merged #$PR_NUMBER: $PR_TITLE [$LABEL]"
+          else
+
+            echo
+
+            $DO git checkout -b $PR_WORKING_BRANCH $REPO_BASE_BRANCH
+            $DO git pull $PR_REPO $PR_BRANCH
+
+            $DO git checkout "$UPDATE_WORKING_BRANCH"
+            $DO git merge --squash "$PR_WORKING_BRANCH"
+            $DO git commit --file="$COMMIT_COMMENT_FILE" --author="$BOT_IDENTIFIER"
+
+            cat $COMMIT_COMMENT_FILE
+
+            # TODO: After the $UPDATE_WORKING_BRANCH is merged, close all of these
+            # pull requests, ideally with a comment indicating what happened.
+
+          fi
+
+          # Keep track of each PR that has been merged into this branch
+          # in a comment in the BODY of the PR we will create below.
+          if $NEED_PR_HEADER_IN_BODY
+          then
+            BODY="$BODY\\n\\nPull requests tagged [$LABEL] merged with this release:\\n"
+            UPDATE_PR_BODY="$UPDATE_PR_BODY\\n\\nPull requests tagged [$LABEL] merged with this release:\\n"
+
+            NEED_PR_HEADER_IN_BODY=false
+          fi
+          BODY="$BODY\\n#$PR_NUMBER: $PR_TITLE"
+          UPDATE_PR_BODY="$UPDATE_PR_BODY\\n$REPO#$PR_NUMBER: $PR_TITLE"
+        fi
+      done
+    fi
   fi
 fi
 
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-#
-#   M E R G E   U P S T R E A M   R E L E A S E
-#
-#   Merge the upstream release into the repository we are updating.
-#
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-if $NEED_UPSTTREAM_MERGE
-then
-  # TODO:  Maybe we should make a temporary branch, and do a squash-merge here
-
-  git checkout $UPDATE_WORKING_BRANCH
-  aborterr "Could not switch to branch '$UPDATE_WORKING_BRANCH'"
-
-  echo "### Pulling in latest release from $UPSTREAM_URL $availableVersion"
-  $DO git pull "$UPSTREAM_URL" "$availableVersion"
-  status=$(git status --porcelain . | grep '^UU')
-  if [ -z "$status" ] ; then
-    $DO git add -A .
-    $DO git commit --author="$BOT_IDENTIFIER" -m "Update to $UPSTREAM_URL $availableVersion."
-  fi
-fi
-
-# Push working branch back up to origin
-$DO git push origin "$UPDATE_WORKING_BRANCH"
-check "Pushed $UPDATE_WORKING_BRANCH back up to origin of $FORKED_REPO" "Could not push $UPDATE_WORKING_BRANCH to origin of $FORKED_REPO"
-
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-#
-#   C R E A T E   P U L L   R E Q U E S T
-#
-#   Make a pull request for the desired update.  The actual tests
-#   will run against a PR in another "updates" repository; we do not
-#   want a circle.yml or .travis.yml in an upstream repository, because
-#   it would get in the way of downstream users who wanted their own
-#   test files at the root of their repositories.
-#
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-# Check to see if there is already a PR for this branch.
-
-FIND_REPO_FILE="$TEMP_WORK/find-pr-in-repo.json"
-
-find_pull_request_by_title "$REPO" "$TITLE" "$FIND_REPO_FILE"
-
-NEW_PR_NUMBER="$(jq ".items[0].number" "$FIND_REPO_FILE" | sed -e 's/"//g')"
-
-# If the PR was not found, then create it.
-if [ -z "$NEW_PR_NUMBER" ] || [ "$NEW_PR_NUMBER" == "null" ]
-then
-  NEW_REPO_PR_INFO_FILE="$TEMP_WORK/new-pr.json"
-
-  BODY="This PR was created by the create-update-pr script.\n\n$BODY"
-
-  # Create the PR on REPO
-  create_pull_request "$REPO" "$TITLE" "$BODY" "$REPO_BASE_BRANCH" "$UPDATE_WORKING_BRANCH" "$NEW_REPO_PR_INFO_FILE"
-
-  # Get the PR number for the new PR
-  NEW_PR_NUMBER="$(jq ".number" "$NEW_REPO_PR_INFO_FILE" | sed -e 's/"//g')"
-
-  # Add an "automation" label to the update PR
-  add_label_to_issue "$REPO" "$NEW_PR_NUMBER" "automation" "fad8c7"
-fi
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
