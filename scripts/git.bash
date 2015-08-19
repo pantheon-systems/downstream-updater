@@ -1,6 +1,54 @@
 #!/bin/bash
 
 #
+# Clone a repo, or, if it already exists, then just update
+# the specified branch.
+#
+function clone_or_update() {
+  local REPO="$1"
+  local REPO_BASE_BRANCH="$2"
+  local FORKED_REPO_URL="$3"
+
+  local REPO_URL=git@github.com:${REPO}.git
+  local REPO_OWNER=$(echo $REPO | sed -e 's#/[^/]*##')
+  local REPO_SHORT_NAME=$(echo $REPO | sed -e 's#[^/]*/##')
+
+  if [ -z "$FORKED_REPO_URL" ]
+  then
+    FORKED_REPO_URL="$REPO_URL"
+  fi
+
+  (
+    if [ ! -d "$REPO_SHORT_NAME" ] ; then
+      echo "### Creating fresh clone of $REPO_SHORT_NAME"
+      git clone $FORKED_REPO_URL $REPO_SHORT_NAME
+      check "Checked out $FORKED_REPO_URL" "Failed to check out $FORKED_REPO_URL"
+      cd $REPO_SHORT_NAME
+      if [ "$REPO_URL" != "$FORKED_REPO_URL" ]
+      then
+        git remote add main $REPO_URL
+        aborterr "Could not add remote 'main'"
+      fi
+      git checkout $REPO_BASE_BRANCH
+      aborterr "Could not switch to $REPO_BASE_BRANCH"
+    else
+      echo "### Updating $REPO_SHORT_NAME to HEAD of $REPO_BASE_BRANCH in github"
+      cd $REPO_SHORT_NAME
+      git checkout $REPO_BASE_BRANCH
+      aborterr "Could not switch to $REPO_BASE_BRANCH"
+      REMOTE=origin
+      git remote show | grep main
+      if [ $? == 0 ]
+      then
+        REMOTE=main
+      fi
+      git pull $REMOTE $REPO_BASE_BRANCH
+      aborterr "Could not pull $REPO_BASE_BRANCH from remote $REMOTE of $REPO"
+    fi
+  )
+}
+
+#
 # Squash-merge one branch into another, preserving the last commit
 # on the merged-in branch.
 #
