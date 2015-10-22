@@ -1,0 +1,225 @@
+#!/usr/bin/env php
+<?php
+
+$home = getenv("HOME");
+$project_dir_to_update = getcwd();
+
+print("home is $home\n");
+print("project to update is $project_dir_to_update\n");
+
+//
+// usage:
+//
+//   cd drops-8
+//   update-with-single-commit --release-node https://www.drupal.org/node/123456789
+//
+// Get parsed command line options.
+//
+//  -d                                                      Debug mode
+//
+//  -v                                                      Verbose mode
+//
+//  --upstream git://git.drupal.org/project/drupal.git      Where to find updated releases
+//
+//  --mergerepo git@github.com:pantheon-systems/drupal.git  Where to combine the Pantheon modifications before squashing
+//
+//  --project-cache /path                                   Where to clone repositories
+//
+//  --release-node https://www.drupal.org/node/2578775
+//
+$options = getopt ("dv", array(
+  'upstream:',
+  'project-cache:',
+  'version-major:',
+  'upstream-branch:',
+  'local-branch:',
+  'release-node:',
+  'update-base:',
+)) + array(
+  'upstream' => "git://git.drupal.org/project/drupal.git",
+  'mergerepo' => "git@github.com:pantheon-systems/drupal.git",
+  'project-cache' => $home . "/local/upstreams",
+  'version-major' => 8,
+  'release-node' => '',
+  'update-base' => 'update-base',
+);
+
+$options += array(
+  'upstream-branch' => 'drupal-' . $options['version-major'],
+  'upstream-base' => 'drupal-' . $options['version-major'] . '-base',
+  'update-branch' => 'drops-' . $options['version-major'],
+);
+
+$BOT_NAME = "Pantheon Automation";
+$BOT_EMAIL = "bot@getpantheon.com";
+$BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
+
+// var_export($options);
+
+$upstream_url = $options['upstream'];
+$mergerepo_url = $options['mergerepo'];
+$project_cache = $options['project-cache'];
+$version_major = $options['version-major'];
+$upstream_branch = $options['upstream-branch'];
+$update_branch = $options['update-branch'];
+$upstream_base = $options['upstream-base'];
+$release_node = $options['release-node'];
+$update_base = $options['update-base'];
+
+$upstream_org = 'drupal-org'; // TODO: get from $upstream_url
+$upstream_short_name = basename($upstream_url, ".git");
+$upstream_name = $upstream_org . '-' . $upstream_short_name;
+$mergerepo_org = 'pantheon-systems'; // TODO: get from $mergerepo_url
+$mergerepo_name = $mergerepo_org . '-' . basename($mergerepo_url, ".git");
+$upstream_path = $project_cache . '/' . $upstream_name;
+$mergerepo_path = $project_cache . '/' . $mergerepo_name;
+
+// TODO: build from the $mergerepo_url
+$mergerepo_upstream_remote = "drupal-org";
+
+$cmd = "git rev-parse --abbrev-ref HEAD";
+exec($cmd, $current_branch_output, $status);
+$working_branch = $current_branch_output[0];
+
+print("current branch is $working_branch\n");
+
+// Find the most recent version.
+$cmd = "git ls-remote --tags \"$upstream_url\" | sed -e 's|refs/tags/||' | cut -f2 | grep '^$version_major\\.[0-9]\\+' | grep -v '}\$'";
+exec($cmd, $tags_output, $status);
+usort($tags_output, 'version_compare');
+$available_version = array_pop($tags_output);
+$previous_version = array_pop($tags_output);
+
+// TODO: There will be trouble if we skip a version. :P
+// We should test to make sure that $previous_version exists
+// in the commit comments of the update repository. If it
+// does not, then pop off more versions until we find the
+// last one we updated to.
+
+//$previous_version = "8.0.0-beta12";
+//$available_version = "8.0.0-beta15";
+
+print "\nThe next available version is $available_version\n\n";
+
+$dev_version = preg_replace('/-[a-z0-9]*$/', '', $available_version);
+$dev_version = preg_replace('/[0-9]+$/', 'x', $dev_version);
+
+print "\nThe dev version is $dev_version\n";
+
+$commit_message = "Update to " . ucfirst($upstream_short_name) . " $available_version.";
+if ($release_node) {
+  $commit_message .= " For more information, see $release_node";
+}
+
+print "\nThe commit comment is:\n$commit_message\n";
+
+// Make sure we are up to date in the repository we are updating (drops-N)
+passthru("git checkout master");
+passthru("git pull origin master");
+
+
+// Clone the mergerepo if it does not already exist.
+@mkdir($project_cache);
+if (!is_dir($mergerepo_path)) {
+  print("git clone $mergerepo_url $mergerepo_path\n");
+  passthru("git clone $mergerepo_url $mergerepo_path");
+}
+chdir($mergerepo_path);
+
+print("Merge repo path is $mergerepo_path\n");
+
+// Bring the mergerepo up to date
+passthru("git fetch origin");
+passthru("git checkout $dev_version");
+passthru("git pull origin $dev_version");
+
+// Add a remote for the upstream if it's not already there.
+// If it's there, assume it's correct, I guees.  :P
+exec("git remote", $remote_output, $status);
+if (strpos(implode("\n", $remote_output), $mergerepo_upstream_remote) === FALSE) {
+  print("git remote add $mergerepo_upstream_remote $upstream_url\n");
+  passthru("git remote add $mergerepo_upstream_remote $upstream_url");
+}
+else {
+  print("The remote $mergerepo_upstream_remote already exists in $mergerepo_url\n");
+}
+
+// Next, make sure that our dev branch is up-to-date with the upstream
+passthru("git pull $mergerepo_upstream_remote $dev_version");
+
+// Switch to the "pantheon" dev branch
+passthru("git checkout pantheon-$dev_version");
+passthru("git pull origin pantheon-$dev_version");
+
+// Check to see if we already have a tag for the available version
+exec("git tag -l", $mergerepo_tags, $status);
+$mergerepo_up_to_date = (in_array($available_version, $mergerepo_tags) !== FALSE);
+
+// Update the merge repo, if we need to.
+if (!$mergerepo_up_to_date) {
+  print("git pull $mergerepo_upstream_remote $available_version\n");
+  // Update the pantheon dev branch to the latest version
+  passthru("git pull --no-edit $mergerepo_upstream_remote $available_version");
+  // Make sure that we have all of the commits from the 'pantheon' branch.
+  passthru("git merge --no-edit origin/pantheon");
+  // Change the commit message of the last commit.
+  passthru("git commit --amend --author='$BOT_IDENTIFIER' -m '$commit_message'");
+
+  print("Tag and push updated release\ngit tag -a $available_version\ngit push --tags origin pantheon-$dev_version\n");
+  // Tag the release, and push it back up to the merge repo
+  passthru("git tag -a $available_version -m '$commit_message'");
+//  passthru("git push --tags origin pantheon-$dev_version");
+
+  print("Make a branch, update-$available_version\ngit checkout -B update-$available_version\ngit push origin update-$available_version\n");
+  // Make a branch, too, so that we have a place to make a PR for testing
+  passthru("git checkout -B update-$available_version");
+//  passthru("git push origin update-$available_version");
+}
+else {
+  print("The merge repo, $mergerepo_url, already contains tag $available_version\n");
+}
+
+
+// Next, we are going to do a squash-merge into the project we want to update.
+$squash_work_dir = exec("mktemp -d $project_cache/update-squash-tmp.XXX");
+$squash_path = $squash_work_dir . "/" . basename($mergerepo_path);
+
+// Change back to the project to update, and make sure it is up-to-date
+chdir($project_dir_to_update);
+passthru("git checkout master");
+passthru("git pull origin master");
+
+// Create a branch to do the squash-merge magic on
+passthru("git checkout -B update-$available_version");
+
+// Duplicate the files from the mergerepo, which we have prepared
+// to be in the exact state we desire for the merge.
+print("\nBegin magic.\n");
+print("cp -R $mergerepo_path $squash_path\n");
+passthru("cp -R $mergerepo_path $squash_path");
+
+// Next, git rid of the .git directory in our duplicated repository,
+// and replace it with the .git directory of our destination repository.
+print("rm -rf $squash_path/.git\n");
+passthru("rm -rf $squash_path/.git");
+print("cp -R $project_dir_to_update/.git $squash_path\n");
+passthru("cp -R $project_dir_to_update/.git $squash_path");
+
+// BOOM. All the files are in exactly the state we want them to be in.
+// When we add and commit them, git will figure out what the difference
+// is, and will write an appropriate minimal commit for us.
+chdir($squash_path);
+passthru("git add -A .");
+passthru("git commit --author='$BOT_IDENTIFIER' -m '$commit_message'");
+passthru("git tag -a $available_version -m '$commit_message'");
+
+print("\n\nDONE.\n\nEverything should be all right in $squash_path\n");
+
+
+// Maybe it's better to have folks do this by hand for a bit.
+print("If the project looks okay:\ncd $squash_path\ngit push --tags origin master\n");
+// passthru("git push --tags origin master");
+
+chdir($project_dir_to_update);
+
+
