@@ -462,8 +462,9 @@ NEED_UPSTTREAM_MERGE=false
 # the available upstream release in. Same thing if we already have a tag
 # of the same name.
 
-commithash=$(git log --grep="$availableVersion" --since=1.month --pretty=format:"%h")
-hastag=$(git tag -l | grep $availableVersion)
+availableVersionRegEx="${availableVersion/./\\.}"
+commithash=$(git log --grep="$availableVersionRegEx" --since=1.month --pretty=format:"%h")
+hastag=$(git tag -l | grep $availableVersionRegEx)
 
 if [ -n "$commithash" ] || [ -n "$hastag" ]
 then
