@@ -28,6 +28,7 @@ print("project to update is $project_dir_to_update\n");
 //  --release-node https://www.drupal.org/node/2578775
 //
 $options = getopt ("dv", array(
+  'dev',
   'upstream:',
   'project-cache:',
   'version-major:',
@@ -56,6 +57,7 @@ $BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
 
 // var_export($options);
 
+$dev = array_key_exists('dev', $options);
 $upstream_url = $options['upstream'];
 $mergerepo_url = $options['mergerepo'];
 $project_cache = $options['project-cache'];
@@ -106,7 +108,16 @@ $dev_version = preg_replace('/[0-9]+$/', 'x', $dev_version);
 
 print "\nThe dev version is $dev_version\n";
 
-$commit_message = "Update to " . ucfirst($upstream_short_name) . " $available_version.";
+if ($dev) {
+  $commit_message = "Update to " . ucfirst($upstream_short_name) . " $dev_version.";
+  $available_version = $dev_version;
+  $available_version_label = str_replace(".x", "-dev", $dev_version) . "-" . date("Y-m-d");
+}
+else {
+  $available_version_label = $available_version;
+}
+
+$commit_message = "Update to " . ucfirst($upstream_short_name) . " $available_version_label.";
 if ($release_node) {
   $commit_message .= " For more information, see $release_node";
 }
@@ -165,15 +176,15 @@ if (!$mergerepo_up_to_date) {
   // Change the commit message of the last commit.
   passthru("git commit --amend --author='$BOT_IDENTIFIER' -m '$commit_message'");
 
-  print("Tag and push updated release\ngit tag -a $available_version\ngit push --tags origin pantheon-$dev_version\n");
+  print("Tag and push updated release\ngit tag -a $available_version_label\ngit push --tags origin pantheon-$dev_version\n");
   // Tag the release, and push it back up to the merge repo
-  passthru("git tag -a $available_version -m '$commit_message'");
+  passthru("git tag -a $available_version_label -m '$commit_message'");
 //  passthru("git push --tags origin pantheon-$dev_version");
 
-  print("Make a branch, update-$available_version\ngit checkout -B update-$available_version\ngit push origin update-$available_version\n");
+  print("Make a branch, update-$available_version_label\ngit checkout -B update-$available_version_label\ngit push origin update-$available_version_label\n");
   // Make a branch, too, so that we have a place to make a PR for testing
-  passthru("git checkout -B update-$available_version");
-//  passthru("git push origin update-$available_version");
+  passthru("git checkout -B update-$available_version_label");
+//  passthru("git push origin update-$available_version_label");
 }
 else {
   print("The merge repo, $mergerepo_url, already contains tag $available_version\n");
@@ -190,7 +201,7 @@ passthru("git checkout master");
 passthru("git pull origin master");
 
 // Create a branch to do the squash-merge magic on
-passthru("git checkout -B update-$available_version");
+passthru("git checkout -B update-$available_version_label");
 
 // Duplicate the files from the mergerepo, which we have prepared
 // to be in the exact state we desire for the merge.
@@ -211,14 +222,14 @@ passthru("cp -R $project_dir_to_update/.git $squash_path");
 chdir($squash_path);
 passthru("git add -A .");
 passthru("git commit --author='$BOT_IDENTIFIER' -m '$commit_message'");
-passthru("git tag -a $available_version -m '$commit_message'");
+passthru("git tag -a $available_version_label -m '$commit_message'");
 
 print("\n\nDONE.\n\nEverything should be all right in $squash_path\n");
 
 
 // Maybe it's better to have folks do this by hand for a bit.
-print("If the project looks okay:\ncd $squash_path\ngit push --tags origin master\n");
-// passthru("git push --tags origin master");
+print("If the project looks okay:\ncd $squash_path\ngit push --tags origin update-$available_version_label\n");
+// passthru("git push --tags origin update-$available_version_label");
 
 chdir($project_dir_to_update);
 
