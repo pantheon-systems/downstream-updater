@@ -158,9 +158,10 @@ else {
 // Next, make sure that our dev branch is up-to-date with the upstream
 passthru("git pull $mergerepo_upstream_remote $dev_version");
 
-// Switch to the "pantheon" dev branch
+// Switch to the "pantheon" dev branch; make sure that it and the "patheon" branch are up-to-date.
 passthru("git checkout pantheon-$dev_version");
 passthru("git pull origin pantheon-$dev_version");
+passthru("git pull origin pantheon");
 
 // Check to see if we already have a tag for the available version
 exec("git tag -l", $mergerepo_tags, $status);
