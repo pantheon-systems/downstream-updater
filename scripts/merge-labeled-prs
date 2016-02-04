@@ -4,10 +4,6 @@
 # Default option values
 #
 PR_CREATOR=pantheon-upstream
-FORK_OWNER=
-REPO=pantheon-systems/drops-7
-UPSTREAM_URL=http://git.drupal.org/project/drupal.git
-UPDATE_REPO=
 LABEL=shipit
 BOT_NAME="Pantheon Upstream"
 BOT_EMAIL="developers+pantheon-upstream@getpantheon.com"
@@ -18,17 +14,13 @@ VERSION_PATTERN=
 REPO_BASE_BRANCH=master
 SCRIPTS_DIR=
 TOKEN_CACHE="$HOME/.config/pantheon-upstream/github-token"
-RELEASE_NODE=
-FORCE_CLEANUP=false
+SUMMARY_FILE=
+REPO_URL=
 
 debug=false
 DO=
 VERBOSE=false
-
-#
-# Return codes
-#
-ERROR_ALREADY_UP_TO_DATE=10
+SQUASH=false
 
 #
 # Parse command line args
@@ -51,15 +43,8 @@ while [ $# -gt 0 ] ; do
       VERBOSE=true
       ;;
 
-    --force-cleanup)
-      FORCE_CLEANUP=true
-      ;;
-
-    # --github-token TOKEN: specify the encoded token to use with the GitHub API.
-    # See https://developer.github.com/v3/oauth_authorizations/#create-a-new-authorization
-    --github-token)
-      ENCODED_TOKEN="$1"
-      shift
+    --squash)
+      SQUASH=true
       ;;
 
     # --token-cache FILE: specify the file where the encoded token should be cached
@@ -73,35 +58,6 @@ while [ $# -gt 0 ] ; do
     # to enter their password to create the token.
     --pr-creator)
       PR_CREATOR="$1"
-      shift
-      ;;
-
-    # --fork-owner USER: specify the owner of the forked repository to work
-    # with (in case the user cannot commit to REPO)
-    --fork-owner)
-      FORK_OWNER="$1"
-      shift
-      ;;
-
-    # --repo REPO: specify which repository we are updating.
-    # This must be on GitHub; the name should be organization/project.
-    --repo)
-      REPO="$1"
-      shift
-      ;;
-
-    # --upstream REPO: specify the upstream repository URL we are updating against.
-    # This does not need to be on GitHub; any clone URL will work.
-    --upstream-url)
-      UPSTREAM_URL="$1"
-      shift
-      ;;
-
-    # --update REPO: specify an "update" repo that is used to test the
-    # repository being updated. This must be on GitHub; the name should
-    # be organization/project.
-    --update)
-      UPDATE_REPO="$1"
       shift
       ;;
 
@@ -161,6 +117,17 @@ while [ $# -gt 0 ] ; do
       shift
       ;;
 
+    --summary)
+      SUMMARY_FILE="$1"
+      shift
+      ;;
+
+    # --repo-url "git@github.com:pantheon-systems/drops-7"
+    --repo-url)
+      REPO_URL="$1"
+      shift
+      ;;
+
     -*)
       echo "Unknown option $option"
       exit 1;
@@ -184,55 +151,13 @@ fi
 #   REPO_URL: "git@github.com:pantheon-systems/drops-7"
 #   REPO_OWNER: "pantheon-systems"
 #   REPO_SHORT_NAME: "drops-7"
-REPO_URL=git@github.com:${REPO}.git
+if [ -z "$REPO_URL" ]
+then
+  REPO_URL=$(git config --get remote.origin.url)
+fi
+REPO=$(echo "$REPO_URL" | sed -e 's#[^:]*:##' | sed -e 's#\.git$##')
 REPO_OWNER=$(echo $REPO | sed -e 's#/[^/]*##')
 REPO_SHORT_NAME=$(echo $REPO | sed -e 's#[^/]*/##')
-
-# Given UPSTREAM_URL in the form "git@github.com:pressflow/7.git"
-# or http://git.drupal.org/project/drupal.git, set:
-#   UPSTREAM: pressflow/7
-#   UPSTREAM_OWNER: pressflow
-#   UPSTREAM_SHORT_NAME: 7
-UPSTREAM=$(echo "$UPSTREAM_URL" | sed -e 's#git.drupal.org/project#git.drupal.org/drupal#' -e 's#\([^/]*/[^/]*\).git$#%%%\1#' -e 's/.*%%%//')
-UPSTREAM_OWNER=$(echo $UPSTREAM | sed -e 's#/[^/]*##')
-UPSTREAM_SHORT_NAME=$(echo $UPSTREAM | sed -e 's#[^/]*/##')
-
-# If the user did not specify the url for the "updates"
-# URL, then replace 'drops' with 'updates', and use that.
-# TODO: Need to add a pattern for WordPress, once we support that.
-if [ -z "$UPDATE_REPO" ]
-then
-  # TODO:
-  #   UPDATE_REPO="${REPO/drops/updates}"
-  # For now, only do this for drops-7.
-  UPDATE_REPO="${REPO/drops-7/updates-7}"
-  # If none of the patterns match, then the update repo URL will
-  # be unchanged, and that would not be right.  Clear it, so the
-  # updates step is skipped.
-  if [ "$REPO" == "$UPDATE_REPO" ]
-  then
-    UPDATE_REPO=
-  fi
-fi
-
-# If UPDATE_REPO is set, then also set related variables
-if [ -n "$UPDATE_REPO" ]
-then
-  UPDATE_REPO_URL=git@github.com:${UPDATE_REPO}.git
-  UPDATE_REPO_OWNER=$(echo $UPDATE_REPO | sed -e 's#/[^/]*##')
-  UPDATE_REPO_SHORT_NAME=$(echo $UPDATE_REPO | sed -e 's#[^/]*/##')
-fi
-
-# If no fork owner was specified, then we will work directly
-# from the main repository
-if [ -z "$FORK_OWNER" ]
-then
-  FORK_OWNER="$REPO_OWNER"
-fi
-
-# The forked repo to clone.  This might be the same as REPO
-FORKED_REPO_URL=git@github.com:${FORK_OWNER}/${REPO_SHORT_NAME}.git
-FORKED_REPO=${FORK_OWNER}/${REPO_SHORT_NAME}
 
 # Make an identifier from the bot name and email
 BOT_IDENTIFIER="$BOT_NAME <$BOT_EMAIL>"
@@ -258,6 +183,15 @@ fi
 # Set up a tmp directory to work in
 TEMP_WORK=$(mktemp -d /tmp/update-script.XXX)
 
+# Get the working branch. Report an error if we are not on a working branch.
+UPDATE_WORKING_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+case "$UPDATE_WORKING_BRANCH" in
+  master|*.x)
+    echo "Do not run this script on the branch '$UPDATE_WORKING_BRANCH'; make a working branch first."
+    exit 1
+    ;;
+esac
+
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
 #   B A S H   F U N C T I O N S
@@ -274,90 +208,10 @@ source "$SCRIPTS_DIR/github.bash"
 #
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
+verbose_message "REPO_URL is $REPO_URL"
 verbose_message "REPO is $REPO"
 verbose_message "REPO_OWNER is $REPO_OWNER"
 verbose_message "REPO_SHORT_NAME is $REPO_SHORT_NAME"
-
-verbose_message "UPSTREAM is $UPSTREAM"
-verbose_message "UPSTREAM_OWNER is $UPSTREAM_OWNER"
-verbose_message "UPSTREAM_SHORT_NAME is $UPSTREAM_SHORT_NAME"
-
-verbose_message "FORKED REPO URL is $FORKED_REPO_URL"
-verbose_message "FORKED_REPO is $FORKED_REPO"
-verbose_message "FORK_OWNER is $FORK_OWNER"
-
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-#
-#   A U T H E N T I C A T E   W I T H   G I T H U B
-#
-#   If a github token was not provided, then create one using the
-#   credentials passed via --pr-creator.
-#
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-# If no token was provided, then create one.
-if [ -z "$ENCODED_TOKEN" ] && [ -f "$TOKEN_CACHE" ]
-then
-  ENCODED_TOKEN=$(cat $TOKEN_CACHE)
-fi
-
-if [ -z "$ENCODED_TOKEN" ]
-then
-  echo "--github-token not specified; creating a new token with account $PR_CREATOR.  This will require you to enter your password to grant this script permission to access your public repositories."
-  # Authenticate with GitHub and create a token.  Note that this will prompt
-  # the user for a password.
-  AUTH_TOKEN_FILE="$TEMP_WORK/auth-token.txt"
-  curl https://api.github.com/authorizations --user "$PR_CREATOR" --data '{"scopes":["public_repo","delete_repo"],"note":"Token used to create a PR in the create-update-pr script."}' --output "$AUTH_TOKEN_FILE"
-  check "Authenticated with GitHub" "Could not authenticate with GitHub"
-
-  cat $AUTH_TOKEN_FILE
-
-  # Get the token data
-  ENCODED_TOKEN="$(jq ".token" $AUTH_TOKEN_FILE | sed -e 's/"//g')"
-
-  # Cache the OAuth token so that we do not need to prompt for a password
-  # on successive requests.
-  mkdir -p $(dirname "$TOKEN_CACHE")
-  echo -n "$ENCODED_TOKEN" > "$TOKEN_CACHE"
-  chmod 600 "$TOKEN_CACHE"
-fi
-
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-#
-#   C L O N E   R E P O S I T O R Y   T O   U P D A T E
-#
-#   Create a local repository; clone it if it does not already exist,
-#   or just update the local working copy if it does.
-#
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-if [ ! -d "$REPO_SHORT_NAME" ] ; then
-  echo "### Creating fresh clone of $REPO_SHORT_NAME"
-  git clone $FORKED_REPO_URL $REPO_SHORT_NAME
-  check "Checked out $FORKED_REPO_URL" "Failed to check out $FORKED_REPO_URL"
-  cd $REPO_SHORT_NAME
-  if [ "$REPO_URL" != "$FORKED_REPO_URL" ]
-  then
-    git remote add main $REPO_URL
-    aborterr "Could not add remote 'main'"
-  fi
-  git checkout $REPO_BASE_BRANCH
-  aborterr "Could not switch to $REPO_BASE_BRANCH"
-else
-  echo "### Updating $REPO_SHORT_NAME to HEAD of $REPO_BASE_BRANCH in github"
-  cd $REPO_SHORT_NAME
-  git checkout $REPO_BASE_BRANCH
-  aborterr "Could not switch to $REPO_BASE_BRANCH"
-  REMOTE=origin
-  git remote show | grep main
-  if [ $? == 0 ]
-  then
-    REMOTE=main
-  fi
-  git pull $REMOTE $REPO_BASE_BRANCH
-  aborterr "Could not pull $REPO_BASE_BRANCH from remote $REMOTE of $REPO"
-fi
-
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
@@ -370,6 +224,8 @@ fi
 
 PR_LIST_FILE="$TEMP_WORK/pulls.json"
 
+echo "Label is $LABEL"
+
 #
 # Search for PRs that are labeled for inclusion in this release.
 # The label to search for should be in $LABEL.
@@ -379,11 +235,19 @@ then
   # Search for PRs that are labeled with "$LABEL" (e.g. "shipit")
   find_pull_request_by_label "$REPO" "$LABEL" "$PR_LIST_FILE"
 
+  if $VERBOSE
+  then
+    cat $PR_LIST_FILE
+    echo
+  fi
+
   # Skip the PR merge if the GitHub API fails us for some reason
   if [ -s "$PR_LIST_FILE" ]
   then
     # Find out how many results there are by counting '.items'
     PR_COUNT=$(jq ".items | length" $PR_LIST_FILE)
+
+    echo "found $PR_COUNT PRs"
 
     # Get info for each PR
     NEED_PR_HEADER_IN_BODY=true
@@ -447,18 +311,23 @@ __EOF__
             $DO git pull $PR_REPO $PR_BRANCH
 
             $DO git checkout "$UPDATE_WORKING_BRANCH"
-            $DO git merge --squash "$PR_WORKING_BRANCH"
-            $DO git commit --file="$COMMIT_COMMENT_FILE" --author="$BOT_IDENTIFIER"
+            if $SQUASH
+            then
+              $DO git merge --squash "$PR_WORKING_BRANCH"
+              $DO git commit --file="$COMMIT_COMMENT_FILE" --author="$BOT_IDENTIFIER"
 
-            cat $COMMIT_COMMENT_FILE
+              cat $COMMIT_COMMENT_FILE
+            else
+              $DO git merge "$PR_WORKING_BRANCH"
+            fi
 
             # TODO: After the $UPDATE_WORKING_BRANCH is merged, close all of these
             # pull requests, ideally with a comment indicating what happened.
+            # GitHub should do this for us. At least if we do not squash it should.
 
           fi
 
           # Keep track of each PR that has been merged into this branch
-          # in a comment in the BODY of the PR we will create below.
           if $NEED_PR_HEADER_IN_BODY
           then
             BODY="$BODY\\n\\nPull requests tagged [$LABEL] merged with this release:\\n"
@@ -474,6 +343,18 @@ __EOF__
   fi
 fi
 
+# If the caller wants the summary, write it to the
+# provided file path.
+if [ -n "$SUMMARY_FILE" ]
+then
+  cat <<< $UPDATE_PR_BODY > $SUMMARY_FILE
+fi
+
+if $VERBOSE
+then
+  echo "Summary:"
+  cat <<< $UPDATE_PR_BODY
+fi
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
