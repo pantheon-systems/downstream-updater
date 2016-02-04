@@ -36,6 +36,7 @@ $options = getopt ("dv", array(
   'local-branch:',
   'release-node:',
   'update-base:',
+  'merge-label:',
 )) + array(
   'upstream' => "git://git.drupal.org/project/drupal.git",
   'mergerepo' => "git@github.com:pantheon-systems/drupal.git",
@@ -43,6 +44,7 @@ $options = getopt ("dv", array(
   'version-major' => 8,
   'release-node' => '',
   'update-base' => 'update-base',
+  'merge-label' => 'shipit',
 );
 
 $options += array(
@@ -67,6 +69,7 @@ $update_branch = $options['update-branch'];
 $upstream_base = $options['upstream-base'];
 $release_node = $options['release-node'];
 $update_base = $options['update-base'];
+$merge_label = $options['merge-label'];
 
 $upstream_org = 'drupal-org'; // TODO: get from $upstream_url
 $upstream_short_name = basename($upstream_url, ".git");
@@ -78,6 +81,12 @@ $mergerepo_path = $project_cache . '/' . $mergerepo_name;
 
 // TODO: build from the $mergerepo_url
 $mergerepo_upstream_remote = "drupal-org";
+
+exec("git config --get remote.origin.url", $remoteurl_output, $status);
+$repo_url=$remoteurl_output[0];
+
+print("Remote URL is $repo_url\n");
+
 
 $cmd = "git rev-parse --abbrev-ref HEAD";
 exec($cmd, $current_branch_output, $status);
@@ -163,6 +172,16 @@ passthru("git checkout pantheon-$dev_version");
 passthru("git pull origin pantheon-$dev_version");
 passthru("git pull origin pantheon");
 
+/*
+// no commits in common, cannot merge into the merge-repo like this
+if ($merge_label) {
+  // Merge in any PRs labeled 'shipit'
+  passthru("git checkout pantheon");
+  $merge_labeled_prs_script = __DIR__ . '/merge-labeled-prs';
+  passthru("$merge_labeled_prs_script --repo-url '$repo_url' --label $merge_label -d -v");
+}
+*/
+
 // Check to see if we already have a tag for the available version
 exec("git tag -l", $mergerepo_tags, $status);
 $mergerepo_up_to_date = (in_array($available_version, $mergerepo_tags) !== FALSE);
@@ -203,6 +222,16 @@ passthru("git pull origin master");
 
 // Create a branch to do the squash-merge magic on
 passthru("git checkout -B update-$available_version_label");
+
+// Add PRs labeled 'shipit' to our source repo
+// TODO: These PRs must be also committed to the merge
+// repo (e.g. pantheon-systems/drupal)
+if ($merge_label) {
+  // Merge in any PRs labeled 'shipit'
+  passthru("git checkout pantheon");
+  $merge_labeled_prs_script = __DIR__ . '/merge-labeled-prs';
+  passthru("$merge_labeled_prs_script --repo-url '$repo_url' --label $merge_label -d -v");
+}
 
 // Duplicate the files from the mergerepo, which we have prepared
 // to be in the exact state we desire for the merge.
