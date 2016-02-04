@@ -26,6 +26,22 @@ WP_ENV="${2-dev}"
 
 echo "Fix up $WP_SITE"
 
+# If we are not working in a .git repository, then clone the named project
+if [ ! -d .git ]
+then
+    PUUID=$(terminus site info --site="$WP_SITE" --field=id 2>/dev/null)
+    if [ -z "$PUUID" ]
+    then
+        echo "Could not get UUID for $WP_SITE"
+        exit 1
+    fi
+    REPO="ssh://codeserver.dev.$PUUID@codeserver.dev.$PUUID.drush.in:2222/~/repository.git"
+    BRANCH=master
+
+    git clone --branch "$BRANCH" "$REPO" "$WP_SITE"
+    cd "$WP_SITE"
+fi
+
 terminus wp --site="$WP_SITE" --env="$WP_ENV" "core verify-checksums"
 if [ 0 != $? ] ; then
     echo "wp-cli core verify-checksums reported a failure; please fix this."
