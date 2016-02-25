@@ -12,6 +12,7 @@ BOT_NAME="Pantheon Upstream"
 BOT_EMAIL="developers+pantheon-upstream@getpantheon.com"
 TOOL_NAME="pantheon-systems/donwstream-updater"
 MAINTAINER_EMAIL="greg+downstream-updater@pantheon.io"
+VERSION_REQUIRED_PREFIX=
 VERSION_MAJOR=
 VERSION_PATTERN=
 REPO_BASE_BRANCH=master
@@ -19,6 +20,7 @@ SCRIPTS_DIR=
 TOKEN_CACHE="$HOME/.config/pantheon-upstream/github-token"
 RELEASE_NODE=
 FORCE_CLEANUP=false
+MERGE_FLAGS=
 
 debug=false
 DO=
@@ -139,6 +141,20 @@ while [ $# -gt 0 ] ; do
     --version-pattern)
       VERSION_PATTERN="$1"
       shift
+      ;;
+
+    # The "version prefix" is the required part of the version that comes
+    # before the actual version string, e.g. "pressflow-" for Pressflow.
+    --version-prefix)
+      VERSION_REQUIRED_PREFIX="$1"
+      shift
+      ;;
+
+    # Add --force-merge only if there are merge conflicts, and you have
+    # reviewed them and determined that it is appropriate to just take THEIRS
+    # for all of them.
+    --force-merge)
+      MERGE_FLAGS=-Xtheirs
       ;;
 
     # --base master: the branch to start from
@@ -428,7 +444,7 @@ fi
 # use `sort -n` to do a numeric sort, so that "12" is considered greater
 # than "2".  This will give us the most recent available tag.
 #
-INVARIANT_PART="${VERSION_MAJOR}.${VERSION_PATTERN}"
+INVARIANT_PART="${VERSION_REQUIRED_PREFIX}${VERSION_MAJOR}.${VERSION_PATTERN}"
 
 # List all of the remote tags that match the invariant part of the tag,
 # and then sort the remaining part of the string numerically.  The greatest
@@ -503,7 +519,7 @@ then
   aborterr "Could not switch to branch '$UPDATE_WORKING_BRANCH'"
 
   echo "### Pulling in latest release from $UPSTREAM_URL $availableVersion"
-  $DO git pull "$UPSTREAM_URL" "$availableVersion"
+  $DO git pull $MERGE_FLAGS "$UPSTREAM_URL" "$availableVersion"
   status=$(git status --porcelain . | grep '^UU')
   if [ -z "$status" ] ; then
     $DO git add -A .
