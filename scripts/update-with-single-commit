@@ -276,6 +276,14 @@ passthru("git add -A .");
 passthru("git commit --author='$BOT_IDENTIFIER' -m '$commit_message'");
 passthru("git tag -a $available_version_label -m '$commit_message'");
 
+// Confirm that the Drupal verison looks okay
+$cmd = "drush --root=$squash_path status 'Drupal version' --format=list";
+exec($cmd, $drupal_version_output, $status);
+if ($drupal_version_output != $available_version) {
+  print("\n\nERROR. Tried to update to $available_version, but we have version $drupal_version_output at $squash_path\n");
+  exit(1);
+}
+
 print("\n\nDONE.\n\nEverything should be all right in $squash_path\n");
 
 
