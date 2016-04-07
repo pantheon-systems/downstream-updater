@@ -25,6 +25,8 @@ print("project to update is $project_dir_to_update\n");
 //
 //  --project-cache /path                                   Where to clone repositories
 //
+//  --release 8.0.6                                         Which release to take (default is next available)
+//
 //  --release-node https://www.drupal.org/node/2578775
 //
 $options = getopt ("dv", array(
@@ -37,6 +39,7 @@ $options = getopt ("dv", array(
   'release-node:',
   'update-base:',
   'merge-label:',
+  'release:',
 )) + array(
   'upstream' => "git://git.drupal.org/project/drupal.git",
   'mergerepo' => "git@github.com:pantheon-systems/drupal.git",
@@ -45,6 +48,7 @@ $options = getopt ("dv", array(
   'release-node' => '',
   'update-base' => 'update-base',
   'merge-label' => 'shipit',
+  'release' => '',
 );
 
 $options += array(
@@ -70,6 +74,7 @@ $upstream_base = $options['upstream-base'];
 $release_node = $options['release-node'];
 $update_base = $options['update-base'];
 $merge_label = $options['merge-label'];
+$user_selected_release = $options['release'];
 
 $upstream_org = 'drupal-org'; // TODO: get from $upstream_url
 $upstream_short_name = basename($upstream_url, ".git");
@@ -98,8 +103,26 @@ print("current branch is $working_branch\n");
 $cmd = "git ls-remote --tags \"$upstream_url\" | sed -e 's|refs/tags/||' | cut -f2 | grep '^$version_major\\.[0-9]\\+' | grep -v '}\$'";
 exec($cmd, $tags_output, $status);
 usort($tags_output, 'version_compare');
-$available_version = array_pop($tags_output);
-$previous_version = array_pop($tags_output);
+
+if (!empty($user_selected_release)) {
+  $available_version = $user_selected_release;
+  if (!in_array($available_version, $tags_output)) {
+    print "Could not find an available tag for $available_version\n\n";
+    exit(1);
+  }
+  print "\nSelected release $available_verion\n";
+
+  $latest_version = array_pop($tags_output);
+  if ($latest_version != $available_verion) {
+    print "Note that a newer release, $latest_version, is also available.\n";
+  }
+  print "\n";
+}
+else {
+  $available_version = array_pop($tags_output);
+  $previous_version = array_pop($tags_output);
+  print "\nThe next available version is $available_version\n\n";
+}
 
 // TODO: There will be trouble if we skip a version. :P
 // We should test to make sure that $previous_version exists
@@ -110,7 +133,6 @@ $previous_version = array_pop($tags_output);
 //$previous_version = "8.0.0-beta12";
 //$available_version = "8.0.0-beta15";
 
-print "\nThe next available version is $available_version\n\n";
 
 $dev_version = preg_replace('/-[a-z0-9]*$/', '', $available_version);
 $dev_version = preg_replace('/[0-9]+$/', 'x', $dev_version);
@@ -190,7 +212,7 @@ $mergerepo_up_to_date = (in_array($available_version, $mergerepo_tags) !== FALSE
 if (!$mergerepo_up_to_date) {
   print("git pull $mergerepo_upstream_remote $available_version\n");
   // Update the pantheon dev branch to the latest version
-  passthru("git pull --no-edit $mergerepo_upstream_remote $available_version");
+  exec("git pull --no-edit $mergerepo_upstream_remote $available_version", $pull_update_version_output, $status);
   // Make sure that we have all of the commits from the 'pantheon' branch.
   passthru("git merge --no-edit origin/pantheon");
   // Change the commit message of the last commit.
@@ -218,7 +240,7 @@ $squash_path = $squash_work_dir . "/" . basename($mergerepo_path);
 // Change back to the project to update, and make sure it is up-to-date
 chdir($project_dir_to_update);
 passthru("git checkout master");
-passthru("git pull origin master");
+exec("git pull origin master", $pull_origin_output, $status);
 
 // Create a branch to do the squash-merge magic on
 passthru("git checkout -B update-$available_version_label");
