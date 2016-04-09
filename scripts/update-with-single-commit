@@ -31,6 +31,7 @@ print("project to update is $project_dir_to_update\n");
 //
 $options = getopt ("dv", array(
   'dev',
+  'composer',
   'upstream:',
   'project-cache:',
   'version-major:',
@@ -40,6 +41,7 @@ $options = getopt ("dv", array(
   'update-base:',
   'merge-label:',
   'release:',
+  'main-branch:',
 )) + array(
   'upstream' => "git://git.drupal.org/project/drupal.git",
   'mergerepo' => "git@github.com:pantheon-systems/drupal.git",
@@ -49,6 +51,7 @@ $options = getopt ("dv", array(
   'update-base' => 'update-base',
   'merge-label' => 'shipit',
   'release' => '',
+  'main-branch' => 'master',
 );
 
 $options += array(
@@ -64,6 +67,7 @@ $BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
 // var_export($options);
 
 $dev = array_key_exists('dev', $options);
+$fix_composer = array_key_exists('composer', $options);
 $upstream_url = $options['upstream'];
 $mergerepo_url = $options['mergerepo'];
 $project_cache = $options['project-cache'];
@@ -75,6 +79,7 @@ $release_node = $options['release-node'];
 $update_base = $options['update-base'];
 $merge_label = $options['merge-label'];
 $user_selected_release = $options['release'];
+$main_branch = $options['main-branch'];
 
 $upstream_org = 'drupal-org'; // TODO: get from $upstream_url
 $upstream_short_name = basename($upstream_url, ".git");
@@ -156,8 +161,8 @@ if ($release_node) {
 print "\nThe commit comment is:\n$commit_message\n";
 
 // Make sure we are up to date in the repository we are updating (drops-N)
-passthru("git checkout master");
-passthru("git pull origin master");
+passthru("git checkout $main_branch");
+passthru("git pull origin $main_branch");
 
 
 // Clone the mergerepo if it does not already exist.
@@ -239,15 +244,15 @@ $squash_path = $squash_work_dir . "/" . basename($mergerepo_path);
 
 // Change back to the project to update, and make sure it is up-to-date
 chdir($project_dir_to_update);
-passthru("git checkout master");
-exec("git pull origin master", $pull_origin_output, $status);
+passthru("git checkout $main_branch");
+exec("git pull origin $main_branch", $pull_origin_output, $status);
 
 // Create a branch to do the squash-merge magic on
 passthru("git checkout -B update-$available_version_label");
 
 // Add PRs labeled 'shipit' to our source repo
 // TODO: These PRs must be also committed to the merge
-// repo (e.g. pantheon-systems/drupal)
+// repo (e.g. pantheon-systems/drupal in the Pantheon branch)
 if ($merge_label) {
   // Merge in any PRs labeled 'shipit'
   passthru("git checkout pantheon");
@@ -276,9 +281,18 @@ passthru("git add -A .");
 passthru("git commit --author='$BOT_IDENTIFIER' -m '$commit_message'");
 passthru("git tag -a $available_version_label -m '$commit_message'");
 
+// Update composer if we need to
+if ($fix_composer) {
+  passthru("rm -rf vendor");
+  passthru("composer install");
+  passthru("git add -f vendor");
+  passthru("git commit --amend");
+}
+
 // Confirm that the Drupal verison looks okay
 $cmd = "drush --root=$squash_path status 'Drupal version' --format=list";
 exec($cmd, $drupal_version_output, $status);
+$drupal_version_output = array_pop($drupal_version_output);
 if ($drupal_version_output != $available_version) {
   print("\n\nERROR. Tried to update to $available_version, but we have version $drupal_version_output at $squash_path\n");
   exit(1);
