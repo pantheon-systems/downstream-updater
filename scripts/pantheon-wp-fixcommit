@@ -7,8 +7,8 @@
 #
 # Instructions:
 #
-#   1. Log in to Pantheon CUSTOMER account.  DO NOT use employee account.
-#   2. Create a new site; name it something like “WordPress [NEW VERSION]”.
+#   1. Create a new site; name it something like “WordPress [NEW VERSION]”.
+#   2. Stay in SFTP mode.  Do -NOT- switch to git mode.
 #   3. Clone the site locally using the git connection info.
 #   4. Go to the updates page and click on “update”
 #       - Is WordPress asking for ftp credentials?  Make sure you are in
@@ -19,7 +19,13 @@
 #       are now responsible to update these themselves, if they are using them.
 #   6. Go back to your dashboard and commit the changes from the update
 #
-# Then run this script.
+# Then run this script.  Log in to terminus first, and pass the name of the
+# WordPress site, e.g.
+#
+# ~/pantheon/downstream-updater/scripts/pantheon-wp-fixcommit wordpress-451
+#
+# Follow the instructions output by the script to push a branch for your PR.
+# Make the PR on GitHub.
 #
 WP_SITE="$1"
 WP_ENV="${2-dev}"
