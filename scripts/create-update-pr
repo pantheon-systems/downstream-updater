@@ -311,7 +311,8 @@ then
   # Authenticate with GitHub and create a token.  Note that this will prompt
   # the user for a password.
   AUTH_TOKEN_FILE="$TEMP_WORK/auth-token.txt"
-  curl https://api.github.com/authorizations --user "$PR_CREATOR" --data '{"scopes":["public_repo","delete_repo"],"note":"Token used to create a PR in the create-update-pr script."}' --output "$AUTH_TOKEN_FILE"
+  TOKEN_NAME="create-update-pr token for $(uname -n) $(date "+%Y-%m-%d")"
+  curl https://api.github.com/authorizations --user "$PR_CREATOR" --data '{"scopes":["public_repo","delete_repo"],"note":"'"$TOKEN_NAME"'"}' --output "$AUTH_TOKEN_FILE"
   check "Authenticated with GitHub" "Could not authenticate with GitHub"
 
   cat $AUTH_TOKEN_FILE
@@ -530,6 +531,16 @@ fi
 # Push working branch back up to origin
 $DO git push origin "$UPDATE_WORKING_BRANCH"
 check "Pushed $UPDATE_WORKING_BRANCH back up to origin of $FORKED_REPO" "Could not push $UPDATE_WORKING_BRANCH to origin of $FORKED_REPO"
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#   M E R G E   L A B E L E D   P R s
+#
+#   Look for PRs labeled 'shipit', and merge them into our working branch.
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+$SCRIPTS_DIR/merge-labeled-prs --label shipit
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
