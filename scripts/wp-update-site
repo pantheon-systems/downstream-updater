@@ -1,0 +1,105 @@
+#!/bin/bash
+
+###
+# Set some defaults if PANTHEON_SITE and PANTHEON_BRANCH are not set
+###
+test -n "$PANTHEON_SITE" || PANTHEON_SITE=wp-update
+test -n "$PANTHEON_BRANCH" || PANTHEON_BRANCH=update
+
+# Set the scripts dir if it was not explicitly given to us
+if [ -z "$SCRIPTS_DIR" ]
+then
+  SELF_DIRNAME="`dirname -- "$0"`"
+  SCRIPTS_DIR="`cd -P -- "$SELF_DIRNAME/../scripts" && pwd -P`"
+fi
+
+###
+# Authenticate with Terminus to perform site management operations.
+#
+# You must either log in via terminus auth login prior to running
+# this script, or you must have logged in with a machine token at
+# some time in the past, or you must set the $TERMINUS_TOKEN environment
+# variable must be set with a valid machine token (e.g. if running on a
+# CI server).
+###
+MY_INFO="$(terminus auth whoami)"
+
+if [ $? != 0 ]
+then
+  USE_TOKEN=
+  if [ -n "$TERMINUS_TOKEN" ]
+  then
+    USE_TOKEN="--machine-token=$TERMINUS_TOKEN"
+  fi
+  terminus auth login $USE_TOKEN
+fi
+
+# Check to see if our multidev environment exists before we set -e
+PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
+HAS_MULTIDEV_ENV=$?
+
+set -ex
+
+DO=echo
+
+###
+# Create the 'update' environment for our use.
+###
+if [ $PANTHEON_GIT_URL != 0 ]
+then
+  $DO terminus site create-env --to-env=$PANTHEON_BRANCH --from-env=dev --site=$PANTHEON_SITE
+  PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
+fi
+
+###
+# Get all necessary environment details.
+#
+# We don't need this yet -- git operations done in pantheon-wp-fixcommit script
+###
+
+###
+# Set STFP mode in the new environment if necessary
+###
+$DO terminus site set-connection-mode --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --mode=sftp
+
+###
+# Use wp-cli to check the version of WordPress currently installed
+###
+CURRENT_VERSION=$(terminus wp 'core version' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH 2>/dev/null)
+
+###
+# Run terminus wp to update the site
+###
+$DO terminus wp 'core update' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH
+
+###
+# Use wp-cli to confirm the version of WordPress changed
+###
+UPDATED_VERSION=$(terminus wp 'core version' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH 2>/dev/null)
+
+if [ "x$CURRENT_VERSION" != "x$UPDATED_VERSION" ]
+then
+  echo "WordPress version is $CURRENT_VERSION; no further updates available."
+  exit 1
+fi
+
+###
+# Verify the checksums on the updated site
+###
+$DO terminus wp "core verify-checksums" --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH
+
+###
+# Use terminus to commit the necessary files in the environment.
+###
+$DO terminus site code commit --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --message="Update to WordPress $UPDATED_VERSION."
+
+###
+# Fix the commit for our site. This will clone down the code and do all of the
+# necessary things.
+###
+$DO $SCRIPTS_DIR/pantheon-wp-fixcommit $PANTHEON_SITE $PANTHEON_BRANCH
+
+###
+# Delete the test environment so that we're clean and ready to do it again next time.
+###
+# terminus site delete-env --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --remove-branch
