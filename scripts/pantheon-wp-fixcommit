@@ -29,6 +29,11 @@
 #
 WP_SITE="$1"
 WP_ENV="${2-dev}"
+WP_ENV_BRANCH="$WP_ENV"
+if [ "$WP_ENV_BRANCH" == "dev" ]
+then
+  WP_ENV_BRANCH=master
+fi
 
 echo "Fix up $WP_SITE"
 
@@ -42,9 +47,8 @@ then
         exit 1
     fi
     REPO="ssh://codeserver.dev.$PUUID@codeserver.dev.$PUUID.drush.in:2222/~/repository.git"
-    BRANCH=master
 
-    git clone --branch "$BRANCH" "$REPO" "$WP_SITE"
+    git clone --branch "$WP_ENV_BRANCH" "$REPO" "$WP_SITE"
     cd "$WP_SITE"
 fi
 
@@ -58,8 +62,8 @@ WP_VERSION=$(terminus wp --site="$WP_SITE" --env="$WP_ENV" "core version" | tail
 
 echo "Version is $WP_VERSION"
 
-git checkout master
-git pull origin master
+git checkout $WP_ENV_BRANCH
+git pull origin $WP_ENV_BRANCH
 
 logmsg=$(git log -1 --pretty=format:"%s")
 
@@ -86,8 +90,8 @@ if [ -n "$(echo $logmsg | grep $WP_VERSION)" ] ; then
     echo "Removing the 'Initial Commit' message."
 
     git checkout -b "$BRANCH" HEAD~2
-    git cherry-pick master
-    git checkout master
+    git cherry-pick $WP_ENV_BRANCH
+    git checkout $WP_ENV_BRANCH
     git reset --hard HEAD^^
     git merge "$BRANCH"
 else
