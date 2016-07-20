@@ -154,6 +154,16 @@ else {
 }
 
 $commit_message = "Update to " . ucfirst($upstream_short_name) . " $available_version_label.";
+if (!$release_node) {
+  // Confirm that we can find an appropriate release node.  This is not
+  // great; the pattern it is looking for is too specific, so we won't find
+  // anything if the release node URL format changes.
+  $cmd = "curl https://www.drupal.org/project/drupal 2>/dev/null | grep '\"https://www.drupal.org/project/drupal/releases/{$version_major}[0-9.]*\"' | sed 's|.*\(https://www.drupal.org/project/drupal/releases/[0-9.a-zA-Z-]*\).*|\\1|g' | sort -r | head -n 1";
+  exec($cmd, $release_node_output, $status);
+  if (!empty($release_node_output) && ($status == 0)) {
+    $release_node = $release_node_output[0];
+  }
+}
 if ($release_node) {
   $commit_message .= " For more information, see $release_node";
 }
