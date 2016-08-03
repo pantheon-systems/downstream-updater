@@ -31,6 +31,7 @@ print("project to update is $project_dir_to_update\n");
 //
 $options = getopt ("dv", array(
   'dev',
+  'beta',
   'composer',
   'upstream:',
   'project-cache:',
@@ -80,6 +81,7 @@ $update_base = $options['update-base'];
 $merge_label = $options['merge-label'];
 $user_selected_release = $options['release'];
 $main_branch = $options['main-branch'];
+$allow_beta = array_key_exists('beta', $options);
 
 $upstream_org = 'drupal-org'; // TODO: get from $upstream_url
 $upstream_short_name = basename($upstream_url, ".git");
@@ -104,8 +106,12 @@ $working_branch = $current_branch_output[0];
 
 print("current branch is $working_branch\n");
 
+$excludeBeta = '';
+if (!$allow_beta) {
+  $excludeBeta = " | grep -v '\\-[a-z]\\+[0-9]*\$'";
+}
 // Find the most recent version.
-$cmd = "git ls-remote --tags \"$upstream_url\" | sed -e 's|refs/tags/||' | cut -f2 | grep '^$version_major\\.[0-9]\\+' | grep -v '}\$'";
+$cmd = "git ls-remote --tags \"$upstream_url\" | sed -e 's|refs/tags/||' | cut -f2 | grep '^$version_major\\.[0-9]\\+' | grep -v '}\$' $excludeBeta";
 exec($cmd, $tags_output, $status);
 usort($tags_output, 'version_compare');
 
