@@ -68,7 +68,7 @@ $BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
 // var_export($options);
 
 $dev = array_key_exists('dev', $options);
-$fix_composer = array_key_exists('composer', $options);
+$fix_composer = array_key_exists('composer', $options) ? $options['composer'] : null;
 $upstream_url = $options['upstream'];
 $mergerepo_url = $options['mergerepo'];
 $project_cache = $options['project-cache'];
@@ -295,7 +295,11 @@ passthru("cp -R $project_dir_to_update/.git $squash_path");
 chdir($squash_path);
 passthru("git add -A .");
 passthru("git commit --author='$BOT_IDENTIFIER' -m '$commit_message'");
-passthru("git tag -a $available_version_label -m '$commit_message'");
+passthru("git tag $available_version_label -m '$commit_message'");
+
+if (!isset($fix_composer)) {
+  $fix_composer = file_exists('composer.json');
+}
 
 // Update composer if we need to
 if ($fix_composer) {
