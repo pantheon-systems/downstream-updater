@@ -36,16 +36,15 @@ fi
 
 # Check to see if our multidev environment exists before we set -e
 PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
-HAS_MULTIDEV_ENV=$?
 
 set -ex
 
-DO=echo
+#DO=echo
 
 ###
 # Create the 'update' environment for our use.
 ###
-if [ $PANTHEON_GIT_URL != 0 ]
+if [ -z "$PANTHEON_GIT_URL" ]
 then
   $DO terminus site create-env --to-env=$PANTHEON_BRANCH --from-env=dev --site=$PANTHEON_SITE
   PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
@@ -67,6 +66,9 @@ $DO terminus site set-connection-mode --site=$PANTHEON_SITE --env=$PANTHEON_BRAN
 ###
 CURRENT_VERSION=$(terminus wp 'core version' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH 2>/dev/null)
 
+# Just for prudence
+sleep 10
+
 ###
 # Run terminus wp to update the site
 ###
@@ -77,7 +79,7 @@ $DO terminus wp 'core update' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH
 ###
 UPDATED_VERSION=$(terminus wp 'core version' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH 2>/dev/null)
 
-if [ "x$CURRENT_VERSION" != "x$UPDATED_VERSION" ]
+if [ "x$CURRENT_VERSION" == "x$UPDATED_VERSION" ]
 then
   echo "WordPress version is $CURRENT_VERSION; no further updates available."
   exit 1
@@ -89,9 +91,18 @@ fi
 $DO terminus wp "core verify-checksums" --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH
 
 ###
+# Use wp-cli to do any necessary database updates
+###
+$DP terminus wp 'core update-db' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH 2>/dev/null
+
+# TODO: Code changes do not show up in the multidev environment.
+# https://github.com/pantheon-systems/terminus/issues/1115
+DIFFS=$(terminus site code diffstat --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
+
+###
 # Use terminus to commit the necessary files in the environment.
 ###
-$DO terminus site code commit --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --message="Update to WordPress $UPDATED_VERSION."
+$DO terminus site code commit --yes --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --message="Update to WordPress $UPDATED_VERSION."
 
 ###
 # Fix the commit for our site. This will clone down the code and do all of the
