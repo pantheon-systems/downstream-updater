@@ -86,7 +86,7 @@ BRANCH="wp$WP_VERSION"
 
 # If the previous commit is "Initial Commit", then get rid of it.
 prevlogmsg=$(git log -1 --pretty=format:"%s" HEAD~)
-if [ -n "$(echo $logmsg | grep $WP_VERSION)" ] ; then
+if [ -n "$(echo $prevlogmsg | grep 'Initial Commit')" ] ; then
     echo "Removing the 'Initial Commit' message."
 
     git checkout -b "$BRANCH" HEAD~2
