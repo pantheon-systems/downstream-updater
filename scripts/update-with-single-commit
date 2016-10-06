@@ -7,6 +7,19 @@ $project_dir_to_update = getcwd();
 print("home is $home\n");
 print("project to update is $project_dir_to_update\n");
 
+function do_passthru($command) {
+  print "\n#################################\n# $command\n";
+  passthru($command);
+  print "#################################\n\n";
+}
+
+function do_exec($command, &$output, &$status) {
+  print "\n#################################\n# $command\n";
+  $result = exec($command, $output, $status);
+  print "#################################\n\n";
+  return $result;
+}
+
 //
 // usage:
 //
@@ -94,14 +107,14 @@ $mergerepo_path = $project_cache . '/' . $mergerepo_name;
 // TODO: build from the $mergerepo_url
 $mergerepo_upstream_remote = "drupal-org";
 
-exec("git config --get remote.origin.url", $remoteurl_output, $status);
+do_exec("git config --get remote.origin.url", $remoteurl_output, $status);
 $repo_url=$remoteurl_output[0];
 
 print("Remote URL is $repo_url\n");
 
 
 $cmd = "git rev-parse --abbrev-ref HEAD";
-exec($cmd, $current_branch_output, $status);
+do_exec($cmd, $current_branch_output, $status);
 $working_branch = $current_branch_output[0];
 
 print("current branch is $working_branch\n");
@@ -112,7 +125,7 @@ if (!$allow_beta) {
 }
 // Find the most recent version.
 $cmd = "git ls-remote --tags \"$upstream_url\" | sed -e 's|refs/tags/||' | cut -f2 | grep '^$version_major\\.[0-9]\\+' | grep -v '}\$' $excludeBeta";
-exec($cmd, $tags_output, $status);
+do_exec($cmd, $tags_output, $status);
 usort($tags_output, 'version_compare');
 
 if (!empty($user_selected_release)) {
@@ -150,6 +163,25 @@ $dev_version = preg_replace('/[0-9]+$/', 'x', $dev_version);
 
 print "\nThe dev version is $dev_version\n";
 
+#
+# TODO:
+#
+# Need to determine if we are doing a patch release (8.1.9 to 8.1.10)
+# or a minor release (8.1.10 to 8.2.0). In the case of a minor release,
+# we need to do the following:
+#
+# git fetch drupal-org
+# git checkout -b 8.2.x drupal-org/8.2.x
+# $mergeBase = git merge-base 8.2.x 8.1.x
+# git checkout -b pantheon-8.2.x $mergeBase
+# git merge 8.2.0
+# git merge pantheon
+#
+# !!!!!! At this point you may have a merge conflict.  (Sad panda.)
+# Fix manually, try again.
+
+
+
 if ($dev) {
   $commit_message = "Update to " . ucfirst($upstream_short_name) . " $dev_version.";
   $available_version = $dev_version;
@@ -165,7 +197,7 @@ if (!$release_node) {
   // great; the pattern it is looking for is too specific, so we won't find
   // anything if the release node URL format changes.
   $cmd = "curl https://www.drupal.org/project/drupal 2>/dev/null | grep '\"https://www.drupal.org/project/drupal/releases/{$version_major}[0-9.]*\"' | sed 's|.*\(https://www.drupal.org/project/drupal/releases/[0-9.a-zA-Z-]*\).*|\\1|g' | sort -r | head -n 1";
-  exec($cmd, $release_node_output, $status);
+  do_exec($cmd, $release_node_output, $status);
   if (!empty($release_node_output) && ($status == 0)) {
     $release_node = $release_node_output[0];
   }
@@ -177,77 +209,81 @@ if ($release_node) {
 print "\nThe commit comment is:\n$commit_message\n";
 
 // Make sure we are up to date in the repository we are updating (drops-N)
-passthru("git checkout $main_branch");
-passthru("git pull origin $main_branch");
+do_passthru("git checkout $main_branch");
+do_passthru("git pull origin $main_branch");
 
 
 // Clone the mergerepo if it does not already exist.
 @mkdir($project_cache);
 if (!is_dir($mergerepo_path)) {
   print("git clone $mergerepo_url $mergerepo_path\n");
-  passthru("git clone $mergerepo_url $mergerepo_path");
+  do_passthru("git clone $mergerepo_url $mergerepo_path");
 }
 chdir($mergerepo_path);
 
 print("Merge repo path is $mergerepo_path\n");
 
 // Bring the mergerepo up to date
-passthru("git fetch origin");
-passthru("git checkout $dev_version");
-passthru("git pull origin $dev_version");
+do_passthru("git fetch origin");
+do_passthru("git checkout $dev_version");
+// Note that this does not exist yet if our last release was 8.1.x and we are doing 8.2.x
+do_passthru("git pull origin $dev_version");
 
 // Add a remote for the upstream if it's not already there.
 // If it's there, assume it's correct, I guees.  :P
-exec("git remote", $remote_output, $status);
+do_exec("git remote", $remote_output, $status);
 if (strpos(implode("\n", $remote_output), $mergerepo_upstream_remote) === FALSE) {
   print("git remote add $mergerepo_upstream_remote $upstream_url\n");
-  passthru("git remote add $mergerepo_upstream_remote $upstream_url");
+  do_passthru("git remote add $mergerepo_upstream_remote $upstream_url");
 }
 else {
   print("The remote $mergerepo_upstream_remote already exists in $mergerepo_url\n");
 }
 
 // Next, make sure that our dev branch is up-to-date with the upstream
-passthru("git pull $mergerepo_upstream_remote $dev_version");
+do_passthru("git pull $mergerepo_upstream_remote $dev_version");
 
 // Switch to the "pantheon" dev branch; make sure that it and the "patheon" branch are up-to-date.
-passthru("git checkout pantheon-$dev_version");
-passthru("git pull origin pantheon-$dev_version");
-passthru("git pull origin pantheon");
+// TODO: If pantheon-$dev_version does not exist, then we should create it.
+// We might want to find an appropriate base commit, and branch off of that
+// rather than just branching off of the HEAD of the previous $dev_version branch.
+do_passthru("git checkout pantheon-$dev_version");
+do_passthru("git pull origin pantheon-$dev_version");
+do_passthru("git pull origin pantheon");
 
 /*
 // no commits in common, cannot merge into the merge-repo like this
 if ($merge_label) {
   // Merge in any PRs labeled 'shipit'
-  passthru("git checkout pantheon");
+  do_passthru("git checkout pantheon");
   $merge_labeled_prs_script = __DIR__ . '/merge-labeled-prs';
-  passthru("$merge_labeled_prs_script --repo-url '$repo_url' --label $merge_label -d -v");
+  do_passthru("$merge_labeled_prs_script --repo-url '$repo_url' --label $merge_label -d -v");
 }
 */
 
 // Check to see if we already have a tag for the available version
-exec("git tag -l", $mergerepo_tags, $status);
+do_exec("git tag -l", $mergerepo_tags, $status);
 $mergerepo_up_to_date = (in_array($available_version, $mergerepo_tags) !== FALSE);
 
 // Update the merge repo, if we need to.
 if (!$mergerepo_up_to_date) {
   print("git pull $mergerepo_upstream_remote $available_version\n");
   // Update the pantheon dev branch to the latest version
-  exec("git pull --no-edit $mergerepo_upstream_remote $available_version", $pull_update_version_output, $status);
+  do_exec("git pull --no-edit $mergerepo_upstream_remote $available_version", $pull_update_version_output, $status);
   // Make sure that we have all of the commits from the 'pantheon' branch.
-  passthru("git merge --no-edit origin/pantheon");
+  do_passthru("git merge --no-edit origin/pantheon");
   // Change the commit message of the last commit.
-  passthru("git commit --amend --author='$BOT_IDENTIFIER' -m '$commit_message'");
+  do_passthru("git commit --amend --no-edit --author='$BOT_IDENTIFIER' -m '$commit_message'");
 
   print("Tag and push updated release\ngit tag -a $available_version_label\ngit push --tags origin pantheon-$dev_version\n");
-  // Tag the release, and push it back up to the merge repo
-  passthru("git tag -a $available_version_label -m '$commit_message'");
-//  passthru("git push --tags origin pantheon-$dev_version");
+//  We should not tag the merge repo. The tags in the merge repo are the drupal.org tags.
+//  do_passthru("git tag -a $available_version_label -m '$commit_message'");
+//  do_passthru("git push --tags origin pantheon-$dev_version");
 
   print("Make a branch, update-$available_version_label\ngit checkout -B update-$available_version_label\ngit push origin update-$available_version_label\n");
   // Make a branch, too, so that we have a place to make a PR for testing
-  passthru("git checkout -B update-$available_version_label");
-//  passthru("git push origin update-$available_version_label");
+  do_passthru("git checkout -B update-$available_version_label");
+//  do_passthru("git push origin update-$available_version_label");
 }
 else {
   print("The merge repo, $mergerepo_url, already contains tag $available_version\n");
@@ -255,47 +291,46 @@ else {
 
 
 // Next, we are going to do a squash-merge into the project we want to update.
-$squash_work_dir = exec("mktemp -d $project_cache/update-squash-tmp.XXX");
+$squash_work_dir = do_exec("mktemp -d $project_cache/update-squash-tmp.XXX", $unused_output, $unused_status);
 $squash_path = $squash_work_dir . "/" . basename($mergerepo_path);
 
 // Change back to the project to update, and make sure it is up-to-date
 chdir($project_dir_to_update);
-passthru("git checkout $main_branch");
-exec("git pull origin $main_branch", $pull_origin_output, $status);
+do_passthru("git checkout $main_branch");
+do_exec("git pull origin $main_branch", $pull_origin_output, $status);
 
 // Create a branch to do the squash-merge magic on
-passthru("git checkout -B update-$available_version_label");
+do_passthru("git checkout -B update-$available_version_label");
 
 // Add PRs labeled 'shipit' to our source repo
 // TODO: These PRs must be also committed to the merge
 // repo (e.g. pantheon-systems/drupal in the Pantheon branch)
 if ($merge_label) {
   // Merge in any PRs labeled 'shipit'
-  passthru("git checkout pantheon");
   $merge_labeled_prs_script = __DIR__ . '/merge-labeled-prs';
-  passthru("$merge_labeled_prs_script --repo-url '$repo_url' --label $merge_label -d -v");
+  do_passthru("$merge_labeled_prs_script --repo-url '$repo_url' --label $merge_label -d -v");
 }
 
 // Duplicate the files from the mergerepo, which we have prepared
 // to be in the exact state we desire for the merge.
 print("\nBegin magic.\n");
 print("cp -R $mergerepo_path $squash_path\n");
-passthru("cp -R $mergerepo_path $squash_path");
+do_passthru("cp -R $mergerepo_path $squash_path");
 
 // Next, git rid of the .git directory in our duplicated repository,
 // and replace it with the .git directory of our destination repository.
 print("rm -rf $squash_path/.git\n");
-passthru("rm -rf $squash_path/.git");
+do_passthru("rm -rf $squash_path/.git");
 print("cp -R $project_dir_to_update/.git $squash_path\n");
-passthru("cp -R $project_dir_to_update/.git $squash_path");
+do_passthru("cp -R $project_dir_to_update/.git $squash_path");
 
 // BOOM. All the files are in exactly the state we want them to be in.
 // When we add and commit them, git will figure out what the difference
 // is, and will write an appropriate minimal commit for us.
 chdir($squash_path);
-passthru("git add -A .");
-passthru("git commit --author='$BOT_IDENTIFIER' -m '$commit_message'");
-passthru("git tag $available_version_label -m '$commit_message'");
+do_passthru("git add -A .");
+do_passthru("git commit  --no-edit --author='$BOT_IDENTIFIER' -m '$commit_message'");
+do_passthru("git tag $available_version_label -m '$commit_message'");
 
 if (!isset($fix_composer)) {
   $fix_composer = file_exists('composer.json');
@@ -303,15 +338,15 @@ if (!isset($fix_composer)) {
 
 // Update composer if we need to
 if ($fix_composer) {
-  passthru("rm -rf vendor");
-  passthru("composer install");
-  passthru("git add -f vendor");
-  passthru("git commit --amend");
+  do_passthru("rm -rf vendor");
+  do_passthru("composer install");
+  do_passthru("git add -f vendor");
+  do_passthru("git commit --amend");
 }
 
 // Confirm that the Drupal verison looks okay
 $cmd = "drush --root=$squash_path status 'Drupal version' --format=list";
-exec($cmd, $drupal_version_output, $status);
+do_exec($cmd, $drupal_version_output, $status);
 $drupal_version_output = array_pop($drupal_version_output);
 if ($drupal_version_output != $available_version) {
   print("\n\nERROR. Tried to update to $available_version, but we have version $drupal_version_output at $squash_path\n");
@@ -323,7 +358,7 @@ print("\n\nDONE.\n\nEverything should be all right in $squash_path\n");
 
 // Maybe it's better to have folks do this by hand for a bit.
 print("If the project looks okay:\ncd $squash_path\ngit push --tags origin update-$available_version_label\n");
-// passthru("git push --tags origin update-$available_version_label");
+// do_passthru("git push --tags origin update-$available_version_label");
 
 chdir($project_dir_to_update);
 
