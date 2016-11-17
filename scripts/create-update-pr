@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# User to make commits as
+BOT_NAME = "Pantheon Automation";
+BOT_EMAIL = "bot@getpantheon.com";
+BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
+
+#BOT_NAME="Pantheon Upstream"
+#BOT_EMAIL="developers+pantheon-upstream@getpantheon.com"
+
 #
 # Default option values
 #
@@ -8,8 +16,6 @@ FORK_OWNER=
 REPO=pantheon-systems/drops-7
 UPSTREAM_URL=http://git.drupal.org/project/drupal.git
 UPDATE_REPO=
-BOT_NAME="Pantheon Upstream"
-BOT_EMAIL="developers+pantheon-upstream@getpantheon.com"
 TOOL_NAME="pantheon-systems/donwstream-updater"
 MAINTAINER_EMAIL="greg+downstream-updater@pantheon.io"
 VERSION_REQUIRED_PREFIX=
@@ -241,9 +247,6 @@ fi
 # The forked repo to clone.  This might be the same as REPO
 FORKED_REPO_URL=git@github.com:${FORK_OWNER}/${REPO_SHORT_NAME}.git
 FORKED_REPO=${FORK_OWNER}/${REPO_SHORT_NAME}
-
-# Make an identifier from the bot name and email
-BOT_IDENTIFIER="$BOT_NAME <$BOT_EMAIL>"
 
 # Make a User-Agent string from the tool name and maintainer email address
 UA="pantheon-systems/updater <greg+updater@pantheon.io>"
@@ -525,6 +528,15 @@ then
   if [ -z "$status" ] ; then
     $DO git add -A .
     $DO git commit --author="$BOT_IDENTIFIER" -m "Update to $UPSTREAM_URL $availableVersion."
+  fi
+
+  # To make things easier at PR merge time, rewrite the last commit comment
+  # if it is a merge commit.
+  lastCommitComment="$(git log --pretty="format:%s" -1)"
+  echo "$lastCommitComment" | grep -q 'Merge tag.*into'
+  if [ $? == 0 ]
+  then
+    git commit --amend --author="$BOT_IDENTIFIER" -m "Update to Drupal $availableVersion. For more information, see https://www.drupal.org/project/drupal/releases/$availableVersion."
   fi
 fi
 
