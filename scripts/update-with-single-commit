@@ -3,6 +3,7 @@
 
 $home = getenv("HOME");
 $project_dir_to_update = getcwd();
+$token_cache="$home/.config/pantheon-upstream/github-token";
 
 print("home is $home\n");
 print("project to update is $project_dir_to_update\n");
@@ -118,6 +119,15 @@ do_exec($cmd, $current_branch_output, $status);
 $working_branch = $current_branch_output[0];
 
 print("current branch is $working_branch\n");
+
+
+// Set the GITHUB_TOKEN environment variable if it has not already been
+// defined, and the token cache file exists.
+if (!getenv('GITHUB_TOKEN') && file_exists($token_cache)) {
+  $token = file_get_contents($token_cache);
+  putenv("GITHUB_TOKEN=$token");
+  print "github token is $token\n";
+}
 
 $excludeBeta = '';
 if (!$allow_beta) {
@@ -379,10 +389,10 @@ To create your own test site:
 
 You may also inspect the result of the [functional tests run by Circle CI](https://circleci.com/gh/pantheon-systems/drops-8). These tests will create a [multidev environment in the ci-drops-8 test site](https://admin.dashboard.pantheon.io/sites/689219ca-6583-4af8-ab05-2cebf6ef79a0#multidev/dev-environments) that may be browsed after the tests complete.
 EOT;
-file_put_contents($PR_message_file, $PR_message);
+file_put_contents($PR_message_file, $PR_message_text);
 
 do_passthru("git push --tags origin update-$available_version_label");
-do_passthru("hub pull-request -F '$PR_message_file' ");
+do_passthru("hub pull-request -F $PR_message_file");
 
 unlink($PR_message_file);
 
