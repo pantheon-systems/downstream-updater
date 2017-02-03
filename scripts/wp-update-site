@@ -37,18 +37,23 @@ fi
 # Check to see if our multidev environment exists before we set -e
 PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
 
+#DO=echo
+
 set -ex
 
-#DO=echo
+# Let's delete the old update branch if it exists, just to clean stuff up
+if [ -n "$PANTHEON_GIT_URL" ]
+then
+  $DO terminus site delete-env --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --remove-branch --yes
+fi
+
+# TODO: Probably should use terminus to apply upstream updates to the dev branch of the 'updates' site.
 
 ###
 # Create the 'update' environment for our use.
 ###
-if [ -z "$PANTHEON_GIT_URL" ]
-then
-  $DO terminus site create-env --to-env=$PANTHEON_BRANCH --from-env=dev --site=$PANTHEON_SITE
-  PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
-fi
+$DO terminus site create-env --to-env=$PANTHEON_BRANCH --from-env=dev --site=$PANTHEON_SITE
+PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
 
 ###
 # Get all necessary environment details.
