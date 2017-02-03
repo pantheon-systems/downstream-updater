@@ -1,6 +1,8 @@
 #!/usr/bin/env php
 <?php
 
+// n.b. This script is currently drops-8 specific
+
 $home = getenv("HOME");
 $project_dir_to_update = getcwd();
 $token_cache="$home/.config/pantheon-upstream/github-token";
@@ -223,6 +225,150 @@ do_passthru("git checkout $main_branch");
 do_passthru("git pull origin $main_branch");
 
 
+$drops8_work_dir = do_exec("mktemp -d $project_cache/update-drops8-tmp.XXX", $unused_output, $unused_status);
+$drops8TargetPath = "$drops8_work_dir/drops-8";
+
+print "Work dir is: $drops8_work_dir\n";
+
+// STEP 1: Clone the desired version of Drupal from the source git repository
+// and then get rid of the .git directory
+
+do_passthru("git clone -q --depth 1 --branch $available_version $upstream_url $drops8TargetPath");
+do_passthru("rm -rf $drops8TargetPath/.git");
+do_passthru("composer --working-dir=$drops8TargetPath -q install");
+
+// STEP 2:  Confirm that the Drupal verison looks okay
+
+$cmd = "drush --root=$drops8TargetPath status 'Drupal version' --format=list";
+do_exec($cmd, $drupal_version_output, $status);
+$drupal_version_output = array_pop($drupal_version_output);
+if ($drupal_version_output != $available_version) {
+  print("\n\nERROR. Tried to download $available_version, but we have version $drupal_version_output at $drops8TargetPath\n");
+  exit(1);
+}
+
+// STEP 3: Overlay Pantheon customizations on top of fresh Drupal download
+
+// Entire files to take from drops-8:
+// (TODO: move these to a separate repository)
+$filesToCopy = [
+  '.drush-lock-update',
+  '.gitignore',
+  'drush/example.drushrc.php',
+  'sites/default/config/.htaccess',
+  'sites/default/config/README.txt',
+  'sites/default/default.services.pantheon.preproduction.yml',
+  'sites/default/settings.pantheon.php',
+  'sites/default/settings.php',
+];
+
+foreach ($filesToCopy as $file) {
+  if (!file_exists($file)) {
+    print "Required file $file not found!";
+    exit(1);
+  }
+  $contents = file_get_contents($file);
+  $parent = dirname("$drops8TargetPath/$file");
+  if (!is_dir($parent)) {
+    passthru("mkdir -p $parent >/dev/null 2>&1");
+  }
+  file_put_contents("$drops8TargetPath/$file", $contents);
+}
+
+// Things to adjust:
+
+$defaultSettingsAddition = <<<EOT
+ * Include the Pantheon-specific settings file.
+ *
+ * n.b. The settings.pantheon.php file makes some changes
+ *      that affect all envrionments that this site
+ *      exists in.  Always include this file, even in
+ *      a local development environment, to insure that
+ *      the site settings remain consistent.
+ */
+if (file_exists(__DIR__ . '/settings.pantheon.php')) {
+  include __DIR__ . "/settings.pantheon.php";
+}
+
+/**
+EOT;
+
+$replacementSpot = " * Load local development override configuration, if available.";
+
+$settingsContents = file_get_contents("sites/default/default.settings.php");
+if (strstr($settingsContents, $replacementSpot) === false) {
+  print "default.settings.php no longer contains: $replacementSpot\n";
+  exit(1);
+}
+str_replace($replacementSpot, "$defaultSettingsAddition$replacementSpot", $settingsContents);
+file_put_contents("$drops8TargetPath/sites/default/default.settings.php", $settingsContents);
+
+// STEP 4: Create a branch
+// Create branch in drops-8 source repo, clone .git directory to work project, then check out master again.
+// This effectively makes a new working git repo just like the local one in the remote location, but with
+// all files in the target already in their desired state. Git will figure out the diffs.
+
+do_passthru("git checkout -B update-$available_version_label");
+do_passthru("rsync -raqz .git $drops8TargetPath");
+do_passthru("git checkout master");
+
+// STEP 5: Add a single commit to the branch
+
+do_passthru("git -C $drops8TargetPath add -A --force . >/dev/null 2>&1");
+do_passthru("git -C $drops8TargetPath commit -q --no-edit --author='$BOT_IDENTIFIER' -m '$commit_message'");
+
+print "Drops-8 updated at $drops8TargetPath";
+
+// STEP 6: Check the Drupal version again -- just to make sure we didn't break anything with our edits
+
+$cmd = "drush --root=$drops8TargetPath status 'Drupal version' --format=list";
+do_exec($cmd, $drupal_version_output, $status);
+$drupal_version_output = array_pop($drupal_version_output);
+if ($drupal_version_output != $available_version) {
+  print("\n\nERROR. Trying to add drops-8 content to Drupal $available_version broke 'drush status' on the site.\n");
+  exit(1);
+}
+
+// STEP 7: Create a PR
+
+$PR_message_file = tempnam(sys_get_temp_dir(), "{$update_project}-PR-{$available_version_label}");
+$PR_message_text = <<<EOT
+Update {$update_project} to {$available_version_label}
+
+Inspect the result of the [functional tests run by Circle CI](https://circleci.com/gh/pantheon-systems/drops-8). These tests will create a [multidev environment in the ci-drops-8 test site](https://admin.dashboard.pantheon.io/sites/689219ca-6583-4af8-ab05-2cebf6ef79a0#multidev/dev-environments) that may be browsed after the tests complete.
+
+**OPTIONAL** -- To create your own test site:
+
+- Create a new Drupal 8 site on Pantheon.
+- When site creation is finished, visit dashboard.
+- Switch to "git" mode.
+- Clone your site locally.
+- Apply the files from this PR on top of your local checkout.
+  - git remote add drops-8 git@github.com:pantheon-systems/drops-8.git
+  - git fetch drops-8
+  - git merge drops-8/update-$available_version_label
+- Push your files back up to Pantheon.
+- Switch back to sftp mode.
+- Visit your site and step through the installation process.
+
+EOT;
+file_put_contents($PR_message_file, $PR_message_text);
+
+do_passthru("git -C $drops8TargetPath push --tags origin update-$available_version_label");
+do_passthru("hub -C $drops8TargetPath pull-request -F $PR_message_file");
+
+unlink($PR_message_file);
+
+print "\n\nDONE. Please look for the pull request on GitHub.\n";
+
+exit(0);
+
+// ----------------------------------------------------------------------
+//
+// T H E   O L D   W A Y
+//
+// ----------------------------------------------------------------------
+
 // Clone the mergerepo if it does not already exist.
 @mkdir($project_cache);
 if (!is_dir($mergerepo_path)) {
@@ -251,7 +397,7 @@ else {
 }
 
 // Next, make sure that our dev branch is up-to-date with the upstream
-do_passthru("git pull $mergerepo_upstream_remote $dev_version");
+do_passthru("git pull $mergerepo_upstream_remote $dev_version -Xthiers");
 
 // Switch to the "pantheon" dev branch; make sure that it and the "patheon" branch are up-to-date.
 // TODO: If pantheon-$dev_version does not exist, then we should create it.
@@ -312,6 +458,7 @@ do_exec("git pull origin $main_branch", $pull_origin_output, $status);
 // Create a branch to do the squash-merge magic on
 do_passthru("git checkout -B update-$available_version_label");
 
+/*
 // Add PRs labeled 'shipit' to our source repo
 // TODO: These PRs must be also committed to the merge
 // repo (e.g. pantheon-systems/drupal in the Pantheon branch)
@@ -320,6 +467,7 @@ if ($merge_label) {
   $merge_labeled_prs_script = __DIR__ . '/merge-labeled-prs';
   do_passthru("$merge_labeled_prs_script --repo-url '$repo_url' --label $merge_label -d -v");
 }
+*/
 
 // Duplicate the files from the mergerepo, which we have prepared
 // to be in the exact state we desire for the merge.
