@@ -22,7 +22,7 @@ fi
 # variable must be set with a valid machine token (e.g. if running on a
 # CI server).
 ###
-MY_INFO="$(terminus auth whoami)"
+MY_INFO="$(terminus whoami)"
 
 if [ $? != 0 ]
 then
@@ -31,29 +31,58 @@ then
   then
     USE_TOKEN="--machine-token=$TERMINUS_TOKEN"
   fi
-  terminus auth login $USE_TOKEN
+  terminus auth:login $USE_TOKEN
 fi
 
 # Check to see if our multidev environment exists before we set -e
-PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
+PANTHEON_GIT_URL=$(terminus connection:info --field=git_url $PANTHEON_SITE.$PANTHEON_BRANCH)
 
 #DO=echo
 
 set -ex
 
+#
+# Start out by cloning the site repository
+#
+PUUID=$(terminus site:info $PANTHEON_SITE --field=id 2>/dev/null)
+if [ -z "$PUUID" ]
+then
+    echo "Could not get UUID for $PANTHEON_SITE"
+    exit 1
+fi
+REPO="ssh://codeserver.dev.$PUUID@codeserver.dev.$PUUID.drush.in:2222/~/repository.git"
+
+if [ ! -d "$PANTHEON_SITE" ] ; then
+    git clone "$REPO" "$PANTHEON_SITE"
+    cd "$PANTHEON_SITE"
+    git remote rename origin pantheon
+    git remote add origin git@github.com:pantheon-systems/WordPress.git
+else
+    cd "$PANTHEON_SITE"
+fi
+
+###
+# Apply upstream updates to the dev branch of the update site using git
+###
+$DO git pull origin master
+$DO git push pantheon master
+
+###
+# Use wp-cli to do any necessary database updates on the dev environment
+###
+$DP terminus wp $PANTHEON_SITE.dev -- core update-db 2>/dev/null
+
 # Let's delete the old update branch if it exists, just to clean stuff up
 if [ -n "$PANTHEON_GIT_URL" ]
 then
-  $DO terminus site delete-env --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --remove-branch --yes
+  $DO terminus multidev:delete $PANTHEON_SITE.$PANTHEON_BRANCH --delete-branch --yes
 fi
-
-# TODO: Probably should use terminus to apply upstream updates to the dev branch of the 'updates' site.
 
 ###
 # Create the 'update' environment for our use.
 ###
-$DO terminus site create-env --to-env=$PANTHEON_BRANCH --from-env=dev --site=$PANTHEON_SITE
-PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
+$DO terminus multidev:create $PANTHEON_SITE.dev $PANTHEON_BRANCH
+PANTHEON_GIT_URL=$(terminus connection:info --field=git_url $PANTHEON_SITE.$PANTHEON_BRANCH)
 
 ###
 # Get all necessary environment details.
@@ -64,12 +93,12 @@ PANTHEON_GIT_URL=$(terminus site connection-info --field=git_url --site=$PANTHEO
 ###
 # Set STFP mode in the new environment if necessary
 ###
-$DO terminus site set-connection-mode --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --mode=sftp
+$DO terminus connection:set $PANTHEON_SITE.$PANTHEON_BRANCH sftp
 
 ###
 # Use wp-cli to check the version of WordPress currently installed
 ###
-CURRENT_VERSION=$(terminus wp 'core version' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH 2>/dev/null)
+CURRENT_VERSION=$(terminus wp $PANTHEON_SITE.$PANTHEON_BRANCH -- core version 2>/dev/null)
 
 # Just for prudence
 sleep 10
@@ -77,45 +106,83 @@ sleep 10
 ###
 # Run terminus wp to update the site
 ###
-$DO terminus wp 'core update' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH
+$DO terminus wp $PANTHEON_SITE.$PANTHEON_BRANCH -- core update
 
 ###
 # Use wp-cli to confirm the version of WordPress changed
 ###
-UPDATED_VERSION=$(terminus wp 'core version' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH 2>/dev/null)
+UPDATED_VERSION=$(terminus wp $PANTHEON_SITE.$PANTHEON_BRANCH -- core version 2>/dev/null)
 
 if [ "x$CURRENT_VERSION" == "x$UPDATED_VERSION" ]
 then
   echo "WordPress version is $CURRENT_VERSION; no further updates available."
-  exit 1
+  exit 0
+else
+  echo "WordPress has been updated from $CURRENT_VERSION to $UPDATED_VERSION"
 fi
 
 ###
 # Verify the checksums on the updated site
 ###
-$DO terminus wp "core verify-checksums" --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH
+$DO terminus wp $PANTHEON_SITE.$PANTHEON_BRANCH -- core verify-checksums
 
 ###
 # Use wp-cli to do any necessary database updates
 ###
-$DP terminus wp 'core update-db' --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH 2>/dev/null
+$DP terminus wp $PANTHEON_SITE.$PANTHEON_BRANCH -- core update-db 2>/dev/null
+
+###
+# WORKAROUND: We need to hit the dashboard to refresh the files available to commit
+# https://github.com/pantheon-systems/terminus/issues/1115
+###
+terminus dashboard $PANTHEON_SITE.$PANTHEON_BRANCH
+
+# More prudence
+sleep 10
 
 # TODO: Code changes do not show up in the multidev environment.
 # https://github.com/pantheon-systems/terminus/issues/1115
-DIFFS=$(terminus site code diffstat --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH)
+DIFFS=$(terminus env:diffstat $PANTHEON_SITE.$PANTHEON_BRANCH)
 
 ###
 # Use terminus to commit the necessary files in the environment.
 ###
-$DO terminus site code commit --yes --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --message="Update to WordPress $UPDATED_VERSION."
+$DO terminus env:commit $PANTHEON_SITE.$PANTHEON_BRANCH --yes --message="Update to WordPress $UPDATED_VERSION."
 
 ###
-# Fix the commit for our site. This will clone down the code and do all of the
-# necessary things.
+# Create a branch for the update
 ###
-$DO $SCRIPTS_DIR/pantheon-wp-fixcommit $PANTHEON_SITE $PANTHEON_BRANCH
+git fetch pantheon
+git checkout $PANTHEON_BRANCH
+git checkout -B update-$UPDATED_VERSION
+git push origin update-$UPDATED_VERSION
 
 ###
-# Delete the test environment so that we're clean and ready to do it again next time.
+# Pull request message
 ###
-# terminus site delete-env --site=$PANTHEON_SITE --env=$PANTHEON_BRANCH --remove-branch
+commit_message=/tmp/commitmsg.txt
+cat <<EOT > $commit_message
+Update to WordPress version $UPDATED_VERSION.
+
+Inspect the result of the [functional tests run by Circle CI](https://circleci.com/gh/pantheon-systems/WordPress).
+
+**OPTIONAL** -- To create your own test site:
+
+- Create a new WordPress site on Pantheon.
+- When site creation is finished, visit dashboard.
+- Switch to "git" mode.
+- Clone your site locally.
+- Apply the files from this PR on top of your local checkout.
+  - git remote add WordPress git@github.com:pantheon-systems/WordPress.git
+  - git fetch WordPress
+  - git merge WordPress/update-$UPDATED_VERSION
+- Push your files back up to Pantheon.
+- Switch back to sftp mode.
+- Visit your site and step through the installation process.
+
+EOT
+
+###
+# Create a pull request for the update
+###
+hub pull-request -F $commit_message

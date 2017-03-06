@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# Usage:
+#
+# $ cd dir_with_updated_wp
+# $ wp-release
+#
+# This script assumes that ORIGIN points to pantheon-systems/WordPress
+#
+
+set -ex
+
+# Get the current branch
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Check the version of the current branch
+version=$(wp core version)
+
+# Check to see if there's already a tag for the current version
+set +e
+version_tag=$(git tag -l | grep "^$version\$")
+set -e
+if [ -n "$version_tag" ] ; then
+  echo "Current release already tagged; nothing to do."
+  exit 0
+fi
+
+# Delete all of the non-semver tags from the local repository to
+# avoid conflicts when pushing
+set +e
+non_semver=$(git tag -l | grep -v '^v*[0-9.]*$')
+set -e
+for tag in $non_semver ; do
+  git tag -d $tag
+done
+
+# Tag and merge the new release
+git checkout master
+git merge $branch
+git tag $version
+git push origin master
+git push origin master --tags
+
+# Add a remote for wordpress-network if it's not already there.
+set +e
+has_remote=$(git remote show -n wordpress-network 2>/dev/null)
+set +e
+if [ -z "$has_remote" ] ; then
+  git remote add wordpress-network git@github.com:pantheon-systems/wordpress-network.git
+fi
+
+# Release on wordpress-network too
+git push wordpress-network master
+git push wordpress-network master --tags
+

@@ -316,6 +316,8 @@ do_passthru("git checkout master");
 
 do_passthru("git -C $drops8TargetPath add -A --force . >/dev/null 2>&1");
 do_passthru("git -C $drops8TargetPath commit -q --no-edit --author='$BOT_IDENTIFIER' -m '$commit_message'");
+// n.b. if we do this, it makes the scaffold files available to Composer prior to the release of this version on Pantheon.
+do_passthru("git tag $available_version_label -m '$commit_message'");
 
 print "Drops-8 updated at $drops8TargetPath";
 

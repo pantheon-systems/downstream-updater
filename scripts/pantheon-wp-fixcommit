@@ -1,3 +1,5 @@
+#!/bin/bash
+
 #
 # Presuming that we have a WordPress site that has already been updated
 # through the WordPress admin site and committed through the dashboard,
@@ -37,10 +39,12 @@ fi
 
 echo "Fix up $WP_SITE"
 
+set -ex
+
 # If we are not working in a .git repository, then clone the named project
 if [ ! -d .git ]
 then
-    PUUID=$(terminus site info --site="$WP_SITE" --field=id 2>/dev/null)
+    PUUID=$(terminus site:info $WP_SITE --field=id 2>/dev/null)
     if [ -z "$PUUID" ]
     then
         echo "Could not get UUID for $WP_SITE"
@@ -52,13 +56,13 @@ then
     cd "$WP_SITE"
 fi
 
-terminus wp --site="$WP_SITE" --env="$WP_ENV" "core verify-checksums"
+terminus wp $WP_SITE.$WP_ENV -- core verify-checksums
 if [ 0 != $? ] ; then
     echo "wp-cli core verify-checksums reported a failure; please fix this."
     exit 1
 fi
 
-WP_VERSION=$(terminus wp --site="$WP_SITE" --env="$WP_ENV" "core version" | tail -n 1)
+WP_VERSION=$(terminus wp $WP_SITE.$WP_ENV -- core version | tail -n 1)
 
 echo "Version is $WP_VERSION"
 
