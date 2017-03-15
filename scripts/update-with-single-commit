@@ -498,8 +498,8 @@ if (!isset($fix_composer)) {
 
 // Update composer if we need to
 if ($fix_composer) {
-  do_passthru("rm -rf vendor");
-  do_passthru("composer install");
+  do_passthru("git rm -rf vendor");
+  do_passthru("composer install --no-dev");
   do_passthru("git add -f vendor");
   do_passthru("git commit --amend");
 }
