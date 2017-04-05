@@ -47,6 +47,7 @@ function do_exec($command, &$output, &$status) {
 //
 $options = getopt ("dv", array(
   'dev',
+  'future-dev',
   'beta',
   'composer',
   'upstream:',
@@ -83,7 +84,7 @@ $BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
 
 // var_export($options);
 
-$dev = array_key_exists('dev', $options);
+$dev = array_key_exists('dev', $options) || array_key_exists('future-dev', $options);
 $fix_composer = array_key_exists('composer', $options) ? $options['composer'] : null;
 $upstream_url = $options['upstream'];
 $mergerepo_url = $options['mergerepo'];
@@ -173,35 +174,26 @@ else {
 $dev_version = preg_replace('/-[a-z0-9]*$/', '', $available_version);
 $dev_version = preg_replace('/[0-9]+$/', 'x', $dev_version);
 
+if (array_key_exists('future-dev', $options)) {
+  $version_parts = explode('.', $available_version);
+  $dev_version = $version_parts[0] . '.' . ($version_parts[1] + 1) . '.x';
+  $available_version = $version_parts[0] . '.' . ($version_parts[1] + 1) . '.0';
+}
+
 print "\nThe dev version is $dev_version\n";
 
-#
-# TODO:
-#
-# Need to determine if we are doing a patch release (8.1.9 to 8.1.10)
-# or a minor release (8.1.10 to 8.2.0). In the case of a minor release,
-# we need to do the following:
-#
-# git fetch drupal-org
-# git checkout -b 8.2.x drupal-org/8.2.x
-# $mergeBase = git merge-base 8.2.x 8.1.x
-# git checkout -b pantheon-8.2.x $mergeBase
-# git merge 8.2.0
-# git merge pantheon
-#
-# !!!!!! At this point you may have a merge conflict.  (Sad panda.)
-# Fix manually, try again.
-
-
-
+$expected_version = $available_version;
 if ($dev) {
+  $expected_version = $available_version . '-dev';
   $commit_message = "Update to " . ucfirst($upstream_short_name) . " $dev_version.";
   $available_version = $dev_version;
-  $available_version_label = str_replace(".x", "-dev", $dev_version) . "-" . date("Y-m-d");
+  $available_version_label = $expected_version . "-" . date("Y-m-d");
 }
 else {
   $available_version_label = $available_version;
 }
+
+print "expected version is $expected_version";
 
 $commit_message = "Update to " . ucfirst($upstream_short_name) . " $available_version_label.";
 if (!$release_node) {
@@ -242,8 +234,8 @@ do_passthru("composer --working-dir=$drops8TargetPath -q install");
 $cmd = "drush --root=$drops8TargetPath status 'Drupal version' --format=list";
 do_exec($cmd, $drupal_version_output, $status);
 $drupal_version_output = array_pop($drupal_version_output);
-if ($drupal_version_output != $available_version) {
-  print("\n\nERROR. Tried to download $available_version, but we have version $drupal_version_output at $drops8TargetPath\n");
+if ($drupal_version_output != $expected_version) {
+  print("\n\nERROR. Tried to download $expected_version, but we have version $drupal_version_output at $drops8TargetPath\n");
   exit(1);
 }
 
@@ -325,9 +317,13 @@ print "Drops-8 updated at $drops8TargetPath";
 
 $cmd = "drush --root=$drops8TargetPath status 'Drupal version' --format=list";
 do_exec($cmd, $drupal_version_output, $status);
+if ($status != 0) {
+  print("\n\nERROR. Trying to add drops-8 content to Drupal $expected_version broke 'drush status' on the site.\n");
+  exit(1);
+}
 $drupal_version_output = array_pop($drupal_version_output);
-if ($drupal_version_output != $available_version) {
-  print("\n\nERROR. Trying to add drops-8 content to Drupal $available_version broke 'drush status' on the site.\n");
+if ($drupal_version_output != $expected_version) {
+  print("\n\nERROR. Trying to add drops-8 content to Drupal $expected_version, but Drush is reporting version $drupal_version_output.\n");
   exit(1);
 }
 
