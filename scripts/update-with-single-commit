@@ -302,7 +302,7 @@ file_put_contents("$drops8TargetPath/sites/default/default.settings.php", $setti
 
 do_passthru("git checkout -B update-$available_version_label");
 do_passthru("rsync -raqz .git $drops8TargetPath");
-do_passthru("git checkout master");
+do_passthru("git checkout $main_branch");
 
 // STEP 5: Add a single commit to the branch
 
@@ -538,7 +538,7 @@ EOT;
 file_put_contents($PR_message_file, $PR_message_text);
 
 do_passthru("git push --tags origin update-$available_version_label");
-do_passthru("hub pull-request -F $PR_message_file");
+do_passthru("hub pull-request -b $main_branch -F $PR_message_file");
 
 unlink($PR_message_file);
 
