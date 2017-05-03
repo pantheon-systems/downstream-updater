@@ -39,7 +39,7 @@ git checkout master
 git merge $branch
 git tag $version
 git push origin master
-git push origin master --tags
+git push origin $version
 
 # Add a remote for wordpress-network if it's not already there.
 set +e
@@ -51,5 +51,5 @@ fi
 
 # Release on wordpress-network too
 git push wordpress-network master
-git push wordpress-network master --tags
+git push wordpress-network master $version
 

@@ -227,7 +227,7 @@ print "Work dir is: $drops8_work_dir\n";
 
 do_passthru("git clone -q --depth 1 --branch $available_version $upstream_url $drops8TargetPath");
 do_passthru("rm -rf $drops8TargetPath/.git");
-do_passthru("composer --working-dir=$drops8TargetPath -q install");
+do_passthru("composer --working-dir=$drops8TargetPath -q install --prefer-dist --no-dev --optimize-autoloader");
 
 // STEP 2:  Confirm that the Drupal verison looks okay
 
