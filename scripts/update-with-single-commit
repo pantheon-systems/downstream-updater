@@ -161,15 +161,6 @@ else {
   print "\nThe next available version is $available_version\n\n";
 }
 
-// TODO: There will be trouble if we skip a version. :P
-// We should test to make sure that $previous_version exists
-// in the commit comments of the update repository. If it
-// does not, then pop off more versions until we find the
-// last one we updated to.
-
-//$previous_version = "8.0.0-beta12";
-//$available_version = "8.0.0-beta15";
-
 
 $dev_version = preg_replace('/-[a-z0-9]*$/', '', $available_version);
 $dev_version = preg_replace('/[0-9]+$/', 'x', $dev_version);
@@ -216,6 +207,15 @@ print "\nThe commit comment is:\n$commit_message\n";
 do_passthru("git checkout $main_branch");
 do_passthru("git pull origin $main_branch");
 
+$checkTagOutput = '';
+$checkTagStatus = 0;
+do_exec("git tag -l $available_version", $checkTagOutput, $checkTagStatus);
+if ($checkTagStatus == 0) {
+  print "Already updated to $available_version - nothing to do.\n";
+  exit(10);
+}
+
+print "About to update to $available_version\n";
 
 $drops8_work_dir = do_exec("mktemp -d $project_cache/update-drops8-tmp.XXX", $unused_output, $unused_status);
 $drops8TargetPath = "$drops8_work_dir/drops-8";

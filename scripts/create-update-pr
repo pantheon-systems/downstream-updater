@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # User to make commits as
-BOT_NAME = "Pantheon Automation";
-BOT_EMAIL = "bot@getpantheon.com";
-BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
+BOT_NAME="Pantheon Automation";
+BOT_EMAIL="bot@getpantheon.com";
+BOT_IDENTIFIER="$BOT_NAME <$BOT_EMAIL>";
 
 #BOT_NAME="Pantheon Upstream"
 #BOT_EMAIL="developers+pantheon-upstream@getpantheon.com"
@@ -407,6 +407,8 @@ else
   fi
   git pull $REMOTE $REPO_BASE_BRANCH
   aborterr "Could not pull $REPO_BASE_BRANCH from remote $REMOTE of $REPO"
+  git fetch $REMOTE
+  aborterr "Count not fetch from $REMOTE"
 fi
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
