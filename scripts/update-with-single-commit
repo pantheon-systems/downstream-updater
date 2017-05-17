@@ -175,7 +175,8 @@ print "\nThe dev version is $dev_version\n";
 
 $expected_version = $available_version;
 if ($dev) {
-  $expected_version = $available_version . '-dev';
+  $version_parts = explode('.', $available_version);
+  $expected_version = $version_parts[0] . '.' . $version_parts[1] . '.' . ($version_parts[2] + 1) . '-dev';
   $commit_message = "Update to " . ucfirst($upstream_short_name) . " $dev_version.";
   $available_version = $dev_version;
   $available_version_label = $expected_version . "-" . date("Y-m-d");
@@ -187,7 +188,7 @@ else {
 print "expected version is $expected_version";
 
 $commit_message = "Update to " . ucfirst($upstream_short_name) . " $available_version_label.";
-if (!$release_node) {
+if (!$release_node && !$dev) {
   // Confirm that we can find an appropriate release node.  This is not
   // great; the pattern it is looking for is too specific, so we won't find
   // anything if the release node URL format changes.
@@ -210,7 +211,7 @@ do_passthru("git pull origin $main_branch");
 $checkTagOutput = '';
 $checkTagStatus = 0;
 do_exec("git tag -l $available_version", $checkTagOutput, $checkTagStatus);
-if ($checkTagStatus == 0) {
+if (($checkTagStatus == 0) && !$dev) {
   print "Already updated to $available_version - nothing to do.\n";
   exit(10);
 }
@@ -239,7 +240,15 @@ if ($drupal_version_output != $expected_version) {
   exit(1);
 }
 
-// STEP 3: Overlay Pantheon customizations on top of fresh Drupal download
+// STEP 3: Create a branch to merge any PRs labeled 'shipit'
+
+$pr_merge_branch = "merge-pr-$available_version_label";
+do_passthru("git checkout -B $pr_merge_branch");
+
+$merge_labeled_prs = __DIR__ . '/merge-labeled-prs';
+do_passthru("$merge_labeled_prs");
+
+// STEP 4: Overlay Pantheon customizations on top of fresh Drupal download
 
 // Entire files to take from drops-8:
 // (TODO: move these to a separate repository)
@@ -295,7 +304,12 @@ if (strstr($settingsContents, $replacementSpot) === false) {
 str_replace($replacementSpot, "$defaultSettingsAddition$replacementSpot", $settingsContents);
 file_put_contents("$drops8TargetPath/sites/default/default.settings.php", $settingsContents);
 
-// STEP 4: Create a branch
+// STEP 5: Get rid of the branch with the merged PRs
+
+do_passthru("git checkout $main_branch");
+do_passthru("git branch -D $pr_merge_branch");
+
+// STEP 6: Create a branch for the update
 // Create branch in drops-8 source repo, clone .git directory to work project, then check out master again.
 // This effectively makes a new working git repo just like the local one in the remote location, but with
 // all files in the target already in their desired state. Git will figure out the diffs.
@@ -304,7 +318,7 @@ do_passthru("git checkout -B update-$available_version_label");
 do_passthru("rsync -raqz .git $drops8TargetPath");
 do_passthru("git checkout $main_branch");
 
-// STEP 5: Add a single commit to the branch
+// STEP 7: Add a single commit to the branch
 
 do_passthru("git -C $drops8TargetPath add -A --force . >/dev/null 2>&1");
 do_passthru("git -C $drops8TargetPath commit -q --no-edit --author='$BOT_IDENTIFIER' -m '$commit_message'");
@@ -313,7 +327,7 @@ do_passthru("git tag $available_version_label -m '$commit_message'");
 
 print "Drops-8 updated at $drops8TargetPath";
 
-// STEP 6: Check the Drupal version again -- just to make sure we didn't break anything with our edits
+// STEP 8: Check the Drupal version again -- just to make sure we didn't break anything with our edits
 
 $cmd = "drush --root=$drops8TargetPath status 'Drupal version' --format=list";
 do_exec($cmd, $drupal_version_output, $status);
@@ -327,7 +341,7 @@ if ($drupal_version_output != $expected_version) {
   exit(1);
 }
 
-// STEP 7: Create a PR
+// STEP 9: Create a PR
 
 $PR_message_file = tempnam(sys_get_temp_dir(), "{$update_project}-PR-{$available_version_label}");
 $PR_message_text = <<<EOT
