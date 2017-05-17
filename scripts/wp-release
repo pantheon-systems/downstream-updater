@@ -43,8 +43,8 @@ git push origin $version
 
 # Add a remote for wordpress-network if it's not already there.
 set +e
-has_remote=$(git remote show -n wordpress-network 2>/dev/null)
-set +e
+has_remote=$(git remote show | grep wordpress-network 2>/dev/null)
+set -e
 if [ -z "$has_remote" ] ; then
   git remote add wordpress-network git@github.com:pantheon-systems/wordpress-network.git
 fi
