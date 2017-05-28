@@ -13,6 +13,23 @@ then
   SCRIPTS_DIR="`cd -P -- "$SELF_DIRNAME/../scripts" && pwd -P`"
 fi
 
+# By default, update to whatever `wp core update` wants to update to
+UPDATE_TO_VERSION=
+
+#
+# Parse command line args
+#
+while [ $# -gt 0 ] ; do
+  option="$1"
+  shift
+
+  case "$option" in
+    --nightly)
+      UPDATE_TO_VERSION='--version=nightly'
+      ;;
+  esac
+done
+
 ###
 # Authenticate with Terminus to perform site management operations.
 #
@@ -106,7 +123,7 @@ sleep 10
 ###
 # Run terminus wp to update the site
 ###
-$DO terminus wp $PANTHEON_SITE.$PANTHEON_BRANCH -- core update
+$DO terminus wp $PANTHEON_SITE.$PANTHEON_BRANCH -- core update $UPDATE_TO_VERSION
 
 ###
 # Use wp-cli to confirm the version of WordPress changed
