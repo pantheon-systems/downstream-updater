@@ -211,7 +211,8 @@ do_passthru("git pull origin $main_branch");
 $checkTagOutput = '';
 $checkTagStatus = 0;
 do_exec("git tag -l $available_version", $checkTagOutput, $checkTagStatus);
-if (($checkTagStatus == 0) && !$dev) {
+
+if (!empty($checkTagOutput) && !$dev) {
   print "Already updated to $available_version - nothing to do.\n";
   exit(10);
 }
