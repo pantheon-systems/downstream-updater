@@ -405,7 +405,7 @@ else
   then
     REMOTE=main
   fi
-  git pull $REMOTE $REPO_BASE_BRANCH
+  git pull $REMOTE $REPO_BASE_BRANCH --no-edit
   aborterr "Could not pull $REPO_BASE_BRANCH from remote $REMOTE of $REPO"
   git fetch $REMOTE
   aborterr "Count not fetch from $REMOTE"

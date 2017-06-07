@@ -313,12 +313,12 @@ __EOF__
             $DO git checkout "$UPDATE_WORKING_BRANCH"
             if $SQUASH
             then
-              $DO git merge --squash "$PR_WORKING_BRANCH"
+              $DO git merge --squash "$PR_WORKING_BRANCH" --no-edit
               $DO git commit --file="$COMMIT_COMMENT_FILE" --author="$BOT_IDENTIFIER"
 
               cat $COMMIT_COMMENT_FILE
             else
-              $DO git merge "$PR_WORKING_BRANCH"
+              $DO git merge "$PR_WORKING_BRANCH" --no-edit
             fi
 
             # TODO: After the $UPDATE_WORKING_BRANCH is merged, close all of these
