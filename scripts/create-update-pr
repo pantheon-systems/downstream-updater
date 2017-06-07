@@ -555,6 +555,7 @@ check "Pushed $UPDATE_WORKING_BRANCH back up to origin of $FORKED_REPO" "Could n
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 $SCRIPTS_DIR/merge-labeled-prs --label shipit
+$DO git push origin "$UPDATE_WORKING_BRANCH"
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
