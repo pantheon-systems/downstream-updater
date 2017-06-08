@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#set -x
+
 # User to make commits as
 BOT_NAME="Pantheon Automation";
 BOT_EMAIL="bot@getpantheon.com";
@@ -471,9 +473,9 @@ BODY=
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
-#   M E R G E    U P S T R E A M    R E L E A S E
+#   C H E C K   I F    U P S T R E A M    M E R G E   N E E D E D
 #
-#   Merge the upstream release into the repository we are updating.
+#   Exit if no further work is needed.
 #
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
@@ -509,6 +511,18 @@ else
   fi
 fi
 
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#   M E R G E   L A B E L E D   P R s
+#
+#   Look for PRs labeled 'shipit', and merge them into our working branch.
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+$SCRIPTS_DIR/merge-labeled-prs --label shipit
+
+
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
 #   M E R G E   U P S T R E A M   R E L E A S E
@@ -525,7 +539,7 @@ then
   aborterr "Could not switch to branch '$UPDATE_WORKING_BRANCH'"
 
   echo "### Pulling in latest release from $UPSTREAM_URL $availableVersion"
-  $DO git pull $MERGE_FLAGS "$UPSTREAM_URL" "$availableVersion"
+  $DO git pull $MERGE_FLAGS "$UPSTREAM_URL" "$availableVersion" --no-edit
   status=$(git status --porcelain . | grep '^UU')
   if [ -z "$status" ] ; then
     $DO git add -A .
@@ -546,16 +560,6 @@ fi
 $DO git push origin "$UPDATE_WORKING_BRANCH"
 check "Pushed $UPDATE_WORKING_BRANCH back up to origin of $FORKED_REPO" "Could not push $UPDATE_WORKING_BRANCH to origin of $FORKED_REPO"
 
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-#
-#   M E R G E   L A B E L E D   P R s
-#
-#   Look for PRs labeled 'shipit', and merge them into our working branch.
-#
-# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-$SCRIPTS_DIR/merge-labeled-prs --label shipit
-$DO git push origin "$UPDATE_WORKING_BRANCH"
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 #
@@ -575,14 +579,16 @@ FIND_REPO_FILE="$TEMP_WORK/find-pr-in-repo.json"
 
 find_pull_request_by_title "$REPO" "$TITLE" "$FIND_REPO_FILE"
 
-NEW_PR_NUMBER="$(jq ".items[0].number" "$FIND_REPO_FILE" | sed -e 's/"//g')"
+EXISTING_PR_NUMBER="$(jq ".items[0].number" "$FIND_REPO_FILE" | sed -e 's/"//g')"
+
+echo "### The existing PR number is assumed to be $EXISTING_PR_NUMBER"
 
 # If the PR was not found, then create it.
-if [ -z "$NEW_PR_NUMBER" ] || [ "$NEW_PR_NUMBER" == "null" ]
+if [ -z "$EXISTING_PR_NUMBER" ] || [ "$EXISTING_PR_NUMBER" == "null" ]
 then
   NEW_REPO_PR_INFO_FILE="$TEMP_WORK/new-pr.json"
 
-  BODY="This PR was created by the create-update-pr script.\n\n$BODY"
+  BODY="This PR was created by the create-update-pr script.\n\nFor more information, see https://www.drupal.org/project/drupal/releases/$availableVersion\n\nInstructions to test:\n\nCreate a new Drupal 7 site on Pantheon.\nWhen site creation is finished, visit dashboard.\nSwitch to git mode.\nClone your site locally.\nApply the files from this PR on top of your local checkout.\ngit remote add drops-7 git@github.com:pantheon-systems/drops-7.git\ngit fetch drops-7\ngit merge drops-7/$UPDATE_WORKING_BRANCH\nPush your files back up to Pantheon.\nSwitch back to sftp mode.\nVisit your site. Step through the installation process. Look for any problems."
 
   # Create the PR on REPO
   create_pull_request "$REPO" "$TITLE" "$BODY" "$REPO_BASE_BRANCH" "$UPDATE_WORKING_BRANCH" "$NEW_REPO_PR_INFO_FILE"
@@ -590,8 +596,12 @@ then
   # Get the PR number for the new PR
   NEW_PR_NUMBER="$(jq ".number" "$NEW_REPO_PR_INFO_FILE" | sed -e 's/"//g')"
 
+  echo "Please examine the pull request at: https://github.com/$REPO/pull/$NEW_PR_NUMBER"
+
   # Add an "automation" label to the update PR
   add_label_to_issue "$REPO" "$NEW_PR_NUMBER" "automation" "fad8c7"
+else
+  echo "Pull request already exists: https://github.com/$REPO/pull/$EXISTING_PR_NUMBER"
 fi
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
