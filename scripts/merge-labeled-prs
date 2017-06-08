@@ -308,7 +308,7 @@ __EOF__
             echo
 
             $DO git checkout -b $PR_WORKING_BRANCH $REPO_BASE_BRANCH
-            $DO git pull $PR_REPO $PR_BRANCH
+            $DO git pull $PR_REPO $PR_BRANCH --no-edit
 
             $DO git checkout "$UPDATE_WORKING_BRANCH"
             if $SQUASH
