@@ -1,0 +1,13 @@
+{
+    "name": "pantheon-systems/wordpress-composer",
+    "description": "WordPress for Pantheon with a composer.json file.",
+    "type": "project",
+    "extra": {
+        "branch-alias": {
+            "dev-master": "4.x-dev"
+        }
+    },
+    "license": [
+        "GPL-2.0+"
+    ]
+}

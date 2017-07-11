@@ -76,13 +76,31 @@ if [ ! -d "$PANTHEON_SITE" ] ; then
     git remote add origin git@github.com:pantheon-systems/WordPress.git
 else
     cd "$PANTHEON_SITE"
+    git checkout master
 fi
 
 ###
 # Apply upstream updates to the dev branch of the update site using git
 ###
-$DO git pull origin master
-$DO git push pantheon master
+$DO git pull origin master --no-edit
+
+
+
+###
+# Switch to an 'update' branch
+###
+git checkout -B update
+
+###
+# Merge in any pull requests labeled 'shipit'
+###
+$SCRIPTS_DIR/merge-labeled-prs --squash --label shipit
+
+###
+# Push the result back up to the Pantheon site. Push from our 'update'
+# branch to the Pantheon site's 'master' branch.
+###
+$DO git push pantheon update:master
 
 ###
 # Use wp-cli to do any necessary database updates on the dev environment
@@ -100,12 +118,6 @@ fi
 ###
 $DO terminus multidev:create $PANTHEON_SITE.dev $PANTHEON_BRANCH
 PANTHEON_GIT_URL=$(terminus connection:info --field=git_url $PANTHEON_SITE.$PANTHEON_BRANCH)
-
-###
-# Get all necessary environment details.
-#
-# We don't need this yet -- git operations done in pantheon-wp-fixcommit script
-###
 
 ###
 # Set STFP mode in the new environment if necessary
@@ -162,7 +174,7 @@ sleep 10
 DIFFS=$(terminus env:diffstat $PANTHEON_SITE.$PANTHEON_BRANCH)
 
 # Find the URL to the release node
-release_url=$(curl https://wordpress.org/news/ 2>/dev/null | grep 'https://wordpress.org/news/2017/05/wordpress-[0-9.-]*/' | sed 's|.*\(https://wordpress.org/news/2017/05/wordpress-[0-9.-]*/\).*|\1|g' | sort -r | head -n 1)
+release_url=$(curl https://wordpress.org/news/ 2>/dev/null | grep '<a [^>]*>WordPress 4.8 ' | grep -iv 'Release Candidate' | grep -iv 'Beta' | sed 's|.*\(https://wordpress.org/news/[a-zA-Z/0-9._-]*\).*|\1|g' | sort -r | head -n 1)
 
 ###
 # Use terminus to commit the necessary files in the environment.
@@ -173,6 +185,7 @@ $DO terminus env:commit $PANTHEON_SITE.$PANTHEON_BRANCH --yes --message="Update 
 # Create a branch for the update
 ###
 git fetch pantheon
+git pull pantheon update --no-edit
 git checkout $PANTHEON_BRANCH
 git checkout -B update-$UPDATED_VERSION
 current_comment=$(git log --pretty=format:"%s" -1)
