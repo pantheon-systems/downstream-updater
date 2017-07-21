@@ -36,6 +36,9 @@ while [ $# -gt 0 ] ; do
       MAJOR_VERSION=4
       ;;
 
+    d7)
+      ;;
+
     -s|--simulate)
       DO=echo
       ;;
