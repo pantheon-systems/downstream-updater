@@ -6,6 +6,7 @@
 # $ wp-release
 #
 # This script assumes that ORIGIN points to pantheon-systems/WordPress
+# and the current branch is a PR with a new version.
 #
 SELF_DIRNAME="`dirname -- "$0"`"
 
@@ -14,8 +15,24 @@ set -ex
 # Get the current branch
 branch=$(git rev-parse --abbrev-ref HEAD)
 
+# Fail if we are on the master branch
+if [ "$branch" == "master" ]
+then
+  echo "Current branch is master. Run this script from a branch that contains a new version that has not been tagged yet."
+  echo 1
+fi
+
 # Check the version of the current branch
 version=$(wp core version)
+
+# Only release stable versions
+set +e
+non_stable=$(echo $version | grep -v '^v*[0-9.]*$')
+set -e
+if [ -n "$non_stable" ] ; then
+  echo "Current version is $version; this script can only be used to releasese stable versions"
+  echo 1
+fi
 
 # Check to see if there's already a tag for the current version
 set +e
@@ -38,6 +55,7 @@ done
 # Tag and merge the new release
 git checkout master
 git merge $branch
+git commit --amend --author="Pantheon Automation <bot@getpantheon.com>"
 git tag $version
 git push origin master
 git push origin $version

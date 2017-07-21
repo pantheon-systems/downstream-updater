@@ -1,11 +1,15 @@
 {
     "name": "pantheon-systems/wordpress-composer",
     "description": "WordPress for Pantheon with a composer.json file.",
-    "type": "project",
+    "type": "wordpress-core",
     "extra": {
         "branch-alias": {
             "dev-master": "4.x-dev"
-        }
+        },
+        "wordpress-install-dir": "web/wp"
+    },
+    "require": {
+        "johnpbloch/wordpress-core-installer": "~0.1"
     },
     "license": [
         "GPL-2.0+"
