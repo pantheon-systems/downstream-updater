@@ -2,10 +2,10 @@
 #
 # Usage:
 #
-# $ cd dir_with_updated_wp
-# $ wp-release
+# $ cd dir_with_updated_d8
+# $ d8-release
 #
-# This script assumes that ORIGIN points to pantheon-systems/WordPress
+# This script assumes that ORIGIN points to pantheon-systems/drops-7
 # and the current branch is a PR with a new version.
 #
 SELF_DIRNAME="`dirname -- "$0"`"
@@ -23,7 +23,7 @@ then
 fi
 
 # Check the version of the current branch
-version=$(wp core version)
+version=$(drush status 'Drupal version' | sed -e 's/[^:]*: *//')
 
 # Only release stable versions
 set +e
@@ -60,22 +60,5 @@ git tag $version
 git push origin master
 git push origin $version
 
-# Add a remote for wordpress-network if it's not already there.
-set +e
-has_remote=$(git remote show | grep wordpress-network 2>/dev/null)
-set -e
-if [ -z "$has_remote" ] ; then
-  git remote add wordpress-network git@github.com:pantheon-systems/wordpress-network.git
-fi
-
-# Release on wordpress-network too
-git push wordpress-network master
-git push wordpress-network master $version
-
-# Update the pantheon-systems/wordpress-composer version of
-# this upstream, which squashes each release to one commit
-# and adds a composer.json file.
-$SELF_DIRNAME/create-composer-version-of-project wp
-
-# TODO: Update example-wordpress-composer composer.lock file
+# TODO: Update example-drops-8-composer composer.lock file
 

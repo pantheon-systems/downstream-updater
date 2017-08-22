@@ -94,7 +94,7 @@ git checkout -B update
 ###
 # Merge in any pull requests labeled 'shipit'
 ###
-$SCRIPTS_DIR/merge-labeled-prs --squash --label shipit
+#$SCRIPTS_DIR/merge-labeled-prs --squash --label shipit
 
 ###
 # Push the result back up to the Pantheon site. Push from our 'update'

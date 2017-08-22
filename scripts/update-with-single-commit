@@ -334,8 +334,9 @@ do_passthru("git checkout $main_branch");
 
 do_passthru("git -C $drops8TargetPath add -A --force . >/dev/null 2>&1");
 do_passthru("git -C $drops8TargetPath commit -q --no-edit --author='$BOT_IDENTIFIER' -m '$commit_message'");
+
 // n.b. if we do this, it makes the scaffold files available to Composer prior to the release of this version on Pantheon.
-do_passthru("git tag $available_version_label -m '$commit_message'");
+// do_passthru("git tag $available_version_label -m '$commit_message'");
 
 print "Drops-8 updated at $drops8TargetPath";
 
@@ -571,3 +572,8 @@ unlink($PR_message_file);
 print "\n\nDONE. Please look for the pull request on GitHub.\n";
 
 chdir($project_dir_to_update);
+
+// Switch to the update branch
+do_passthru("git checkout update-$available_version_label");
+do_passthru("git pull origin update-$available_version_label");
+

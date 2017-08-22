@@ -2,10 +2,10 @@
 #
 # Usage:
 #
-# $ cd dir_with_updated_wp
-# $ wp-release
+# $ cd dir_with_updated_d7
+# $ d7-release
 #
-# This script assumes that ORIGIN points to pantheon-systems/WordPress
+# This script assumes that ORIGIN points to pantheon-systems/drops-7
 # and the current branch is a PR with a new version.
 #
 SELF_DIRNAME="`dirname -- "$0"`"
@@ -23,7 +23,7 @@ then
 fi
 
 # Check the version of the current branch
-version=$(drush8 status 'Drupal version' | sed -e 's/[^:]*: *//')
+version=$(drush status 'Drupal version' | sed -e 's/[^:]*: *//')
 
 # Only release stable versions
 set +e
@@ -64,4 +64,6 @@ git push origin $version
 # this upstream, which squashes each release to one commit
 # and adds a composer.json file.
 $SELF_DIRNAME/create-composer-version-of-project d7
+
+# TODO: Update example-drops-7-composer composer.lock file
 
