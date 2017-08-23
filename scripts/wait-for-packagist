@@ -1,0 +1,60 @@
+#!/usr/bin/env php
+<?php
+
+//
+// usage:
+//
+//   wait-for-packagist org/project major.minor.patch
+//
+// This script will query Packagist and continue to sleep until the
+// new version mentioned in the parameters appears in the project.
+//
+if (count($argv) < 3) {
+  print "Usage: wait-for-packagist org/project major.minor.patch";
+  exit(1);
+}
+
+$project = $argv[1];
+$version = $argv[2];
+
+// Wait for up to 5 minutes for the release to appear
+$timelimit = 5 * 60;
+$end_time = time() + $timelimit;
+
+$contents = '';
+while ($end_time - time() > 0) {
+  if (!empty($contents)) {
+    print "$version not found in $project. Waiting a bit before checking again.\n";
+    sleep(10);
+  }
+
+  $contents = file_get_contents("https://packagist.org/p/$project.json");
+  if (empty($contents)) {
+    print "Could not find info about $project on packagist.org.";
+    exit(1);
+  }
+
+  $data = json_decode($contents, true);
+  if (empty($data)) {
+    print "Could not interpret contents from packagist.org as json data:\n\n$contents\n";
+    exit(1);
+  }
+
+  if (!isset($data['packages'])) {
+    print "json data from packagist.org is missing a 'packages' entry:\n\n$contents\n";
+    exit(1);
+  }
+
+  if (!isset($data['packages'][$project])) {
+    print "json data from packagist.org is missing an entry for $project:\n\n$contents\n";
+    exit(1);
+  }
+
+  if (isset($data['packages'][$project][$version])) {
+    print "Version $version exists\n";
+    exit(0);
+  }
+}
+
+print "Could not find $version in $project!";
+exit(1);
