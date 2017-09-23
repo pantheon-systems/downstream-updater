@@ -100,7 +100,7 @@ git checkout -B update
 # Push the result back up to the Pantheon site. Push from our 'update'
 # branch to the Pantheon site's 'master' branch.
 ###
-$DO git push pantheon update:master
+$DO git push pantheon update:master --force
 
 ###
 # Use wp-cli to do any necessary database updates on the dev environment
