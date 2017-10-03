@@ -176,7 +176,8 @@ print "\nThe dev version is $dev_version\n";
 $expected_version = $available_version;
 if ($dev) {
   $version_parts = explode('.', $available_version);
-  $expected_version = $version_parts[0] . '.' . $version_parts[1] . '.' . ($version_parts[2] + 1) . '-dev';
+  $expected_version_delta = array_key_exists('future-dev', $options) ? 0 : 1;
+  $expected_version = $version_parts[0] . '.' . $version_parts[1] . '.' . ($version_parts[2] + $expected_version_delta) . '-dev';
   $commit_message = "Update to " . ucfirst($upstream_short_name) . " $dev_version.";
   $available_version = $dev_version;
   $available_version_label = $expected_version . "-" . date("Y-m-d");
