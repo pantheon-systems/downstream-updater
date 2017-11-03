@@ -72,6 +72,9 @@ fi
 git push wordpress-network master
 git push wordpress-network master $version
 
+# Add a note to the documentation changelog
+$SELF_DIRNAME/update_changelog --name=WordPress --project=pantheon-systems/WordPress --version="$version"
+
 # Update the pantheon-systems/wordpress-composer version of
 # this upstream, which squashes each release to one commit
 # and adds a composer.json file.

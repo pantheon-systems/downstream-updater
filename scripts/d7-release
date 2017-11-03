@@ -60,6 +60,9 @@ git tag $version
 git push origin master
 git push origin $version
 
+# Add a note to the documentation changelog
+$SELF_DIRNAME/update_changelog --name=Drupal --project=pantheon-systems/drops-7 --version="$version"
+
 # Update the pantheon-systems/drops-7-composer version of
 # this upstream, which squashes each release to one commit
 # and adds a composer.json file.
