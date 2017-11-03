@@ -62,7 +62,7 @@ $commit_message = "$project_name $version";
 
 $pr = find_pull_request($project, $version);
 if (!empty($pr)) {
-  $pr_url = $pr['url'];
+  $pr_url = $pr['html_url'];
   $commit_message .= ": $pr_url";
 }
 
