@@ -18,8 +18,9 @@ branch=$(git rev-parse --abbrev-ref HEAD)
 # Fail if we are on the master branch
 if [ "$branch" == "master" ]
 then
+  set +ex
   echo "Current branch is master. Run this script from a branch that contains a new version that has not been tagged yet."
-  echo 1
+  exit 1
 fi
 
 # Check the version of the current branch
