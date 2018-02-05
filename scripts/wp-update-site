@@ -94,7 +94,7 @@ git checkout -B update
 ###
 # Merge in any pull requests labeled 'shipit'
 ###
-#$SCRIPTS_DIR/merge-labeled-prs --squash --label shipit
+$SCRIPTS_DIR/merge-labeled-prs --squash --label shipit
 
 ###
 # Push the result back up to the Pantheon site. Push from our 'update'
@@ -110,13 +110,13 @@ $DP terminus wp $PANTHEON_SITE.dev -- core update-db 2>/dev/null
 # Let's delete the old update branch if it exists, just to clean stuff up
 if [ -n "$PANTHEON_GIT_URL" ]
 then
-  $DO terminus multidev:delete $PANTHEON_SITE.$PANTHEON_BRANCH --delete-branch --yes
+  echo $DO terminus multidev:delete $PANTHEON_SITE.$PANTHEON_BRANCH --delete-branch --yes
 fi
 
 ###
 # Create the 'update' environment for our use.
 ###
-$DO terminus multidev:create $PANTHEON_SITE.dev $PANTHEON_BRANCH
+echo $DO terminus multidev:create $PANTHEON_SITE.dev $PANTHEON_BRANCH
 PANTHEON_GIT_URL=$(terminus connection:info --field=git_url $PANTHEON_SITE.$PANTHEON_BRANCH)
 
 ###
@@ -171,10 +171,16 @@ sleep 10
 
 # TODO: Code changes do not show up in the multidev environment.
 # https://github.com/pantheon-systems/terminus/issues/1115
-DIFFS=$(terminus env:diffstat $PANTHEON_SITE.$PANTHEON_BRANCH)
+DIFFS=$(terminus env:diffstat $PANTHEON_SITE.$PANTHEON_BRANCH --format=yaml | grep -v '^{ *}$')
+
+# Stop if the process didn't work.
+if [ -z "$DIFFS" ] ; then
+  echo "#################### ERROR NO DIFFS. Confirm that update went okay on $PANTHEON_SITE.$PANTHEON_BRANCH ###############"
+  exit 1
+fi
 
 # Find the URL to the release node
-release_url=$(curl https://wordpress.org/news/ 2>/dev/null | grep '<a [^>]*>WordPress 4.8 ' | grep -iv 'Release Candidate' | grep -iv 'Beta' | sed 's|.*\(https://wordpress.org/news/[a-zA-Z/0-9._-]*\).*|\1|g' | sort -r | head -n 1)
+release_url=$(curl https://wordpress.org/news/ 2>/dev/null | grep "<a [^>]*>WordPress $UPDATED_VERSION " | grep -iv 'Release Candidate' | grep -iv 'Beta' | sed 's|.*\(https://wordpress.org/news/[a-zA-Z/0-9._-]*\).*|\1|g' | sort -r | head -n 1)
 
 ###
 # Use terminus to commit the necessary files in the environment.
