@@ -23,14 +23,28 @@ function find_changelog_issue($project)
   // Get all of the open issues in pantheon-systems/documentation
   exec("curl 'https://api.github.com/repos/$project/issues?state=open'", $issue_json, $status);
   $issues = json_decode(implode("\n", $issue_json), true);
+  $regex = changelog_regex();
 
   foreach ($issues as $issue) {
-    // TODO: We should search for a title along the lines of
-    // 'November/December changelog' (with the current / next month name in title)
-    if (stripos($issue['title'], 'changelog')) {
+    // Search for a title along the lines of
+    // 'November/December changelog'
+    if (preg_match($regex, $issue['title'])) {
       return $issue;
     }
   }
+}
+
+function changelog_regex()
+{
+  $months = [
+    '', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan',
+  ];
+  $index = (int)date('m');
+
+  $start_month = $months[$index];
+  $next_month = $months[$index+1];
+
+  return "#^${start_month}[a-z]* */${next_month}[a-z]* changelog#i";
 }
 
 function find_pull_request($project, $version)
@@ -48,7 +62,6 @@ function add_changelog_comment($project, $number, $comment, $token)
   print("curl -d '{ \"body\": \"$comment\" }' -X POST https://api.github.com/repos/$project/issues/$number/comments?access_token=$token");
   exec("curl -d '{ \"body\": \"$comment\" }' -X POST https://api.github.com/repos/$project/issues/$number/comments?access_token=$token", $output, $status);
 }
-
 
 $changelog_issue = find_changelog_issue($documentation_project);
 if (empty($changelog_issue)) {
