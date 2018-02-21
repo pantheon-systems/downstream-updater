@@ -226,4 +226,10 @@ EOT
 ###
 # Create a pull request for the update
 ###
-hub pull-request -F $commit_message
+$pr_url=$(hub pull-request -F $commit_message)
+echo $pr_url
+
+# TODO: look up CIRCLE_BUILD from the $pr_url
+CIRCLE_BUILD="ci-###"
+echo '# After the tests pass, to reset the password for the "pantheon" (admin) user:'
+echo "terminus wp ci-wordpress-core.ci-$CIRCLE_BUILD -- user update 1 --user_pass=PASSWORD"
