@@ -123,14 +123,16 @@ $working_branch = $current_branch_output[0];
 
 print("current branch is $working_branch\n");
 
-
-// Set the GITHUB_TOKEN environment variable if it has not already been
-// defined, and the token cache file exists.
-if (!getenv('GITHUB_TOKEN') && file_exists($token_cache)) {
+// Read the github token from the token_cache if it exists.
+// Otherwise fall back to the GITHUB_TOKEN environment variable.
+if (file_exists($token_cache)) {
   $token = file_get_contents($token_cache);
   putenv("GITHUB_TOKEN=$token");
-  print "github token is $token\n";
 }
+else {
+  $token = getenv('GITHUB_TOKEN');
+}
+print "github token is $token\n";
 
 $excludeBeta = '';
 if (!$allow_beta) {
