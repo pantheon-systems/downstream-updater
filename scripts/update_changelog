@@ -14,16 +14,45 @@ $project_name = $options['name'];
 $project = $options['project'];
 $version = $options['version'];
 
-$token = getenv('GITHUB_TOKEN');
-
+$HOME = getenv('HOME');
+$token_cache="$HOME/.config/pantheon-upstream/github-token";
+if (is_file($token_cache)) {
+  $token = file_get_contents($token_cache);
+}
+if (empty($token)) {
+  $token = getenv('GITHUB_TOKEN');
+}
 $documentation_project = 'pantheon-systems/documentation';
 
 function find_changelog_issue($project)
 {
+  return find_by_regex("https://api.github.com/repos/$project/issues?state=open", changelog_regex());
+}
+
+function find_pull_request($project, $version)
+{
+  return find_by_regex("https://api.github.com/repos/$project/pulls?state=all", update_version_regex($version));
+}
+
+function find_by_regex($search, $regex)
+{
+  $result = false;
+  $page = 1;
+  while ($result === false) {
+    $result = find_paged_by_regex($search, $regex, $page);
+    $page = $page + 1;
+  }
+  return $result;
+}
+
+// Returns NULL if there is no data on this page, or false if nothing is
+// found. Otherwise, returns the record (array) to the found issue.
+function find_paged_by_regex($search, $regex, $page = 1)
+{
   // Get all of the open issues in pantheon-systems/documentation
-  exec("curl 'https://api.github.com/repos/$project/issues?state=open'", $issue_json, $status);
+  exec("curl '$search&page=$page'", $issue_json, $status);
   $issues = json_decode(implode("\n", $issue_json), true);
-  $regex = changelog_regex();
+  $result = NULL;
 
   foreach ($issues as $issue) {
     // Search for a title along the lines of
@@ -31,7 +60,9 @@ function find_changelog_issue($project)
     if (preg_match($regex, $issue['title'])) {
       return $issue;
     }
+    $result = false;
   }
+  return $result;
 }
 
 function changelog_regex()
@@ -47,13 +78,10 @@ function changelog_regex()
   return "#^${start_month}[a-z]* */${next_month}[a-z]* changelog#i";
 }
 
-function find_pull_request($project, $version)
+function update_version_regex($version)
 {
-  // Get all of the open issues in pantheon-systems/documentation
-  exec("curl 'https://api.github.com/repos/$project/pulls?head=update-$version'", $pr_json, $status);
-  $prs = json_decode(implode("\n", $pr_json), true);
-  $pr = reset($prs);
-  return $pr;
+  $versexpr = str_replace('.', '\\.', $version);
+  return "#^Update.*${versexpr}\$#i";
 }
 
 function add_changelog_comment($project, $number, $comment, $token)
@@ -68,8 +96,11 @@ if (empty($changelog_issue)) {
   print "Could not find changelog issue\n";
   exit(1);
 }
+
 $changelog_url = $changelog_issue['url'];
 $changelog_issue_number = $changelog_issue['number'];
+
+print "Changelog URL is $changelog_url\n";
 
 $commit_message = "$project_name $version";
 
@@ -78,5 +109,7 @@ if (!empty($pr)) {
   $pr_url = $pr['html_url'];
   $commit_message .= ": $pr_url";
 }
+
+print "Commit URL is $pr_url\n";
 
 add_changelog_comment($documentation_project, $changelog_issue_number, $commit_message, $token);
