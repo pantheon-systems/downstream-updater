@@ -45,10 +45,13 @@ function do_exec($command, &$output, &$status) {
 //
 //  --release-node https://www.drupal.org/node/2578775
 //
+//  --beta | --pre-release                                  Allow alpha/beta/rc versions
+//
 $options = getopt ("dv", array(
   'dev',
   'future-dev',
   'beta',
+  'pre-release',
   'composer',
   'upstream:',
   'project-cache:',
@@ -85,6 +88,7 @@ $BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
 // var_export($options);
 
 $dev = array_key_exists('dev', $options) || array_key_exists('future-dev', $options);
+$pre_release = $options['pre-release'];
 $fix_composer = array_key_exists('composer', $options) ? $options['composer'] : null;
 $upstream_url = $options['upstream'];
 $mergerepo_url = $options['mergerepo'];
@@ -98,7 +102,7 @@ $update_base = $options['update-base'];
 $merge_label = $options['merge-label'];
 $user_selected_release = $options['release'];
 $main_branch = $options['main-branch'];
-$allow_beta = array_key_exists('beta', $options);
+$allow_beta = array_key_exists('beta', $options) || array_key_exists('pre-release', $options);
 
 $upstream_org = 'drupal-org'; // TODO: get from $upstream_url
 $upstream_short_name = basename($upstream_url, ".git");
@@ -139,7 +143,7 @@ if (!$allow_beta) {
   $excludeBeta = " | grep -v '\\-[a-z]\\+[0-9]*\$'";
 }
 // Find the most recent version.
-$cmd = "git ls-remote --tags \"$upstream_url\" | sed -e 's|refs/tags/||' | cut -f2 | grep '^$version_major\\.[0-9]\\+' | grep -v '}\$' $excludeBeta";
+$cmd = "git ls-remote --tags \"$upstream_url\" | sed -e 's|refs/tags/||' | cut -f2 | grep '^$version_major\\.[0-9]' | grep -v '}\$' $excludeBeta";
 do_exec($cmd, $tags_output, $status);
 usort($tags_output, 'version_compare');
 
@@ -160,6 +164,12 @@ if (!empty($user_selected_release)) {
 else {
   $available_version = array_pop($tags_output);
   $previous_version = array_pop($tags_output);
+
+  if (empty($available_version)) {
+    print "Could not find any available versions.\n";
+    exit(1);
+  }
+
   print "\nThe next available version is $available_version\n\n";
 }
 
