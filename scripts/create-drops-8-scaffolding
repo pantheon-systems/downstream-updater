@@ -1,0 +1,134 @@
+#!/bin/bash
+
+#
+# The purpose of this script is to take a project such as
+# drops-8, and make an exact clone of said project such that:
+#
+#  - Each tag is squashed down to a single commit
+#  - Unnecessary parts (e.g. the "core" directory) are removed.
+#
+# The purpose of this is to make a derivative project, e.g.
+# drops-8-scaffolding, that is a reduced version of the original.
+#
+
+SELF_DIRNAME="`dirname -- "$0"`"
+PARENT_DIRNAME="`dirname -- "$SELF_DIRNAME"`"
+
+SOURCE_PROJECT=drops-8
+TARGET_PROJECT=drops-8-scaffolding
+MAJOR_VERSION=8
+DO=
+
+while [ $# -gt 0 ] ; do
+
+  option="$1"
+  shift
+
+  case "$option" in
+
+    -s|--simulate)
+      DO=echo
+      ;;
+
+    *)
+      echo "Parameters are not used; '$option' is invalid."
+      exit 1;
+      ;;
+  esac
+done
+
+
+SOURCE_PROJECT_DIR=build/$SOURCE_PROJECT
+TARGET_COMPOSER_PROJECT_DIR=build/$TARGET_PROJECT
+
+SOURCE_PROJECT_GITHUB="git@github.com:pantheon-systems/${SOURCE_PROJECT}.git"
+TARGET_COMPOSER_PROJECT_GITHUB="git@github.com:pantheon-systems/${TARGET_PROJECT}.git"
+
+#
+# Make our target repository $TARGET_COMPOSER_PROJECT_DIR if it does not already exist
+#
+echo "### Set up target project"
+if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
+then
+  git clone $TARGET_COMPOSER_PROJECT_GITHUB $TARGET_COMPOSER_PROJECT_DIR --branch=master
+  if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
+  then
+    mkdir -p $TARGET_COMPOSER_PROJECT_DIR
+    (
+      cd $TARGET_COMPOSER_PROJECT_DIR
+      git init
+    )
+  fi
+else
+  git -C $SOURCE_PROJECT_DIR checkout master
+  git -C $SOURCE_PROJECT_DIR pull
+fi
+
+#
+# Make a clean local clone of $SOURCE_PROJECT_DIR if it is not already there
+#
+echo "### Set up source project"
+if [ ! -d $SOURCE_PROJECT_DIR ]
+then
+  git clone $SOURCE_PROJECT_GITHUB $SOURCE_PROJECT_DIR --branch=master
+else
+  git -C $SOURCE_PROJECT_DIR checkout master
+  git -C $SOURCE_PROJECT_DIR pull
+fi
+
+#
+# Get a list of all of the SEMVER tags for the desired major version available
+# in $SOURCE_PROJECT_DIR, sorted.
+#
+tags=$(git -C $SOURCE_PROJECT_DIR tag -l | grep "^$MAJOR_VERSION\.[0-9.]*$" | sort -t. -n --key=2)
+echo "Tags are: $tags"
+
+set -x
+
+#
+# Iterate over all of the tags
+#
+echo "### Process tags"
+for tag in $tags ; do
+  echo "------------- $tag -------------"
+  #
+  # Check the commit hash for the tag in $SOURCE_PROJECT_DIR and $TARGET_COMPOSER_PROJECT_DIR
+  #
+  ref=$(git -C $SOURCE_PROJECT_DIR rev-parse refs/tags/$tag 2>/dev/null)
+  targetref=$(git -C $TARGET_COMPOSER_PROJECT_DIR rev-parse refs/tags/$tag 2>/dev/null)
+  if [ "$?" == "0" ]
+  then
+    echo "$SOURCE_PROJECT tag $tag exits at $targetref"
+  else
+    echo "create $tag from $SOURCE_PROJECT $ref"
+    #
+    # If the tag does not exist in the target yet, then create it.
+    #
+    comment="$(git -C $SOURCE_PROJECT_DIR log -1 $tag --pretty=format:"%s")"
+    commitdate="$(git -C $SOURCE_PROJECT_DIR log -1 --date=iso $tag --pretty=format:"%cd")"
+    echo "Date: $commitdate"
+    echo "Comment: $comment"
+    git -C $SOURCE_PROJECT_DIR checkout $tag >/dev/null 2>&1
+
+    # added --exclude=core --exclude=vendor --exclude=composer.lock
+    rsync -ravz --exclude=.git --exclude=core --exclude=vendor --exclude=composer.lock --delete $SOURCE_PROJECT_DIR/ $TARGET_COMPOSER_PROJECT_DIR >/dev/null 2>&1
+    # cp $COMPOSER_JSON_FILE $TARGET_COMPOSER_PROJECT_DIR/composer.json
+
+    git -C $TARGET_COMPOSER_PROJECT_DIR add -A --force . >/dev/null 2>&1
+    git -C $TARGET_COMPOSER_PROJECT_DIR commit -m "$comment" --author="Pantheon Automation <bot@getpantheon.com>" --date="$commitdate" >/dev/null 2>&1
+    git -C $TARGET_COMPOSER_PROJECT_DIR tag "$tag" >/dev/null 2>&1
+
+    # Check to see if we have the right version?
+    # drush -r $TARGET_COMPOSER_PROJECT_DIR status 'Drupal version'
+
+    # Push the new tag back to the target repository
+    $DO git -C $TARGET_COMPOSER_PROJECT_DIR push origin "$tag"
+
+    git -C $SOURCE_PROJECT_DIR checkout master >/dev/null 2>&1
+  fi
+done
+
+# Push master branch back to the target repository
+$DO git -C $TARGET_COMPOSER_PROJECT_DIR push origin master
+
+echo "Done"

@@ -1,0 +1,130 @@
+#!/bin/bash
+
+#
+# The purpose of this script is to examine an upstream project,
+# such as drupal/drupal, and, for each SEMVER tag not in the
+# target repository (e.g. drops-8-scaffolding), determine which
+# of these tags contain no changes to the scaffold files. For
+# each such tag, add a tag to the target repository that points
+# to the same sha1 commit as the previous version.
+#
+
+SELF_DIRNAME="`dirname -- "$0"`"
+PARENT_DIRNAME="`dirname -- "$SELF_DIRNAME"`"
+
+SOURCE_PROJECT=drupalorg-drupal
+TARGET_PROJECT=drops-8-scaffolding
+
+SOURCE_PROJECT_REPO="git://git.drupal.org/project/drupal.git"
+TARGET_PROJECT_REPO="git@github.com:pantheon-systems/${TARGET_PROJECT}.git"
+
+MAJOR_VERSION=8
+DO=
+
+while [ $# -gt 0 ] ; do
+
+  option="$1"
+  shift
+
+  case "$option" in
+
+    -s|--simulate)
+      DO=echo
+      ;;
+
+    *)
+      echo "Parameters are not used; '$option' is invalid."
+      exit 1;
+      ;;
+  esac
+done
+
+SOURCE_PROJECT_DIR=build/$SOURCE_PROJECT
+TARGET_COMPOSER_PROJECT_DIR=build/$TARGET_PROJECT
+
+#
+# Make our target repository $TARGET_COMPOSER_PROJECT_DIR if it does not already exist
+#
+echo "### Set up target project"
+if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
+then
+  git clone $TARGET_PROJECT_REPO $TARGET_COMPOSER_PROJECT_DIR --branch=$SOURCE_BRANCH
+  if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
+  then
+    mkdir -p $TARGET_COMPOSER_PROJECT_DIR
+    (
+      cd $TARGET_COMPOSER_PROJECT_DIR
+      git init
+    )
+  fi
+else
+  git -C $TARGET_COMPOSER_PROJECT_DIR checkout master
+  git -C $TARGET_COMPOSER_PROJECT_DIR pull origin master
+fi
+
+#
+# Make a clean local clone of $SOURCE_PROJECT_DIR if it is not already there
+#
+echo "### Set up source project"
+if [ ! -d $SOURCE_PROJECT_DIR ]
+then
+  git clone $SOURCE_PROJECT_REPO $SOURCE_PROJECT_DIR
+else
+  (
+    cd $SOURCE_PROJECT_DIR
+    git pull
+  )
+fi
+
+#
+# Get a list of all of the SEMVER tags for the desired major version available
+# in $SOURCE_PROJECT_DIR, sorted.
+#
+tags=$(git -C $SOURCE_PROJECT_DIR tag -l | grep "^$MAJOR_VERSION\.[0-9.]*$" | sort -t. -n --key=2)
+echo "Tags are: $tags"
+
+
+#
+# Iterate over all of the tags
+#
+echo "### Process tags"
+lasttag=''
+for tag in $tags ; do
+  if [[ -n "$lasttag" ]]
+  then
+    echo "------------- $tag updated from $lasttag-------------"
+
+    #
+    # Check the commit hash for the tag in $SOURCE_PROJECT_DIR and $TARGET_COMPOSER_PROJECT_DIR
+    #
+    ref=$(git -C $SOURCE_PROJECT_DIR rev-parse refs/tags/$tag 2>/dev/null)
+    targetref=$(git -C $TARGET_COMPOSER_PROJECT_DIR rev-parse refs/tags/$tag 2>/dev/null)
+    if [ "$?" == "0" ]
+    then
+      echo "$SOURCE_PROJECT tag $tag exits at $targetref"
+      has_lasttag=true
+    else
+      if $has_lasttag
+      then
+        echo "Check for changes in scaffold files."
+        git -C $SOURCE_PROJECT_DIR diff --name-only $lasttag $tag | grep -v '^composer*' | grep -v '^core/' | grep -v '.txt$'
+        changed_scaffold_files="$(git -C $SOURCE_PROJECT_DIR diff --name-only $lasttag $tag | grep -v '^composer*' | grep -v '^core/' | grep -v '.txt$')"
+        if [[ -z "$changed_scaffold_files" ]]
+        then
+          echo "Making a pre-tag for $tag: using $lasttag since no scaffold files changed"
+          echo git tag $tag $lasttag
+          $DO git -C $TARGET_COMPOSER_PROJECT_DIR tag $tag $lasttag
+          $DO git -C $TARGET_COMPOSER_PROJECT_DIR push origin $tag
+        else
+          echo "Cannot make a pre-tag for $tag; scaffold files changed."
+        fi
+      else
+        echo "$SOURCE_PROJECT did not have the tag $lasttag so we cannot make a pre-tag."
+      fi
+      has_lasttag=false
+    fi
+  fi
+  lasttag=$tag
+done
+
+echo "Done"

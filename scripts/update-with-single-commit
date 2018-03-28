@@ -230,6 +230,15 @@ if (!empty($checkTagOutput) && !$dev) {
   exit(10);
 }
 
+
+
+print "----------------------------------------------------------------------------------\n";
+print "Check to see if new tag has changes to scaffold files; we will pre-tag drops-8-scaffolding if not.\n";
+
+do_passthru(__DIR__ . '/pre-tag-drops-8-scaffolding');
+
+
+print "----------------------------------------------------------------------------------\n";
 print "About to update to $available_version\n";
 
 $drops8_work_dir = do_exec("mktemp -d $project_cache/update-drops8-tmp.XXX", $unused_output, $unused_status);
@@ -352,6 +361,17 @@ do_passthru("git -C $drops8TargetPath commit -q --no-edit --author='$BOT_IDENTIF
 // do_passthru("git tag $available_version_label -m '$commit_message'");
 
 print "Drops-8 updated at $drops8TargetPath";
+
+print "----------------------------------------------------------------------------------\n";
+print "Check to see if we can pre-tag scaffold files (if there have been no changes)\n";
+
+# TODO: If HEAD has no changes to the scaffold files, then pre-tag the drops-8-scaffolding
+# project with $available_version
+
+$scaffold_project = $update_project . "-scaffolding";
+
+print "----------------------------------------------------------------------------------\n";
+
 
 // STEP 8: Check the Drupal version again -- just to make sure we didn't break anything with our edits
 

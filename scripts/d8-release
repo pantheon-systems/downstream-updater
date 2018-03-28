@@ -64,6 +64,9 @@ git push origin $version
 # Add a note to the documentation changelog
 $SELF_DIRNAME/update_changelog --name=Drupal --project=pantheon-systems/drops-8 --version="$version"
 
+# Update our scaffolding files project too (if it was not pre-tagged)
+$SELF_DIRNAME/create-drops-8-scaffolding
+
 # TODO: Make a pantheon-systems/drupal-core that is just a clone of
 # drupal/core, but tagged after drops-8 is updated.
 
