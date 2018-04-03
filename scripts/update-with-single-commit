@@ -88,7 +88,7 @@ $BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
 // var_export($options);
 
 $dev = array_key_exists('dev', $options) || array_key_exists('future-dev', $options);
-$pre_release = $options['pre-release'];
+$pre_release = array_key_exists('pre-release', $options);
 $fix_composer = array_key_exists('composer', $options) ? $options['composer'] : null;
 $upstream_url = $options['upstream'];
 $mergerepo_url = $options['mergerepo'];
@@ -102,7 +102,7 @@ $update_base = $options['update-base'];
 $merge_label = $options['merge-label'];
 $user_selected_release = $options['release'];
 $main_branch = $options['main-branch'];
-$allow_beta = array_key_exists('beta', $options) || array_key_exists('pre-release', $options);
+$allow_beta = array_key_exists('beta', $options) || $pre_release;
 
 $upstream_org = 'drupal-org'; // TODO: get from $upstream_url
 $upstream_short_name = basename($upstream_url, ".git");
@@ -153,10 +153,10 @@ if (!empty($user_selected_release)) {
     print "Could not find an available tag for $available_version\n\n";
     exit(1);
   }
-  print "\nSelected release $available_verion\n";
+  print "\nSelected release $available_version\n";
 
   $latest_version = array_pop($tags_output);
-  if ($latest_version != $available_verion) {
+  if ($latest_version != $available_version) {
     print "Note that a newer release, $latest_version, is also available.\n";
   }
   print "\n";
