@@ -17,6 +17,7 @@ PR_CREATOR=pantheon-upstream
 FORK_OWNER=
 REPO=pantheon-systems/drops-7
 UPSTREAM_URL=http://git.drupal.org/project/drupal.git
+RELEASE_URL=https://www.drupal.org/project/drupal/releases
 UPDATE_REPO=
 TOOL_NAME="pantheon-systems/donwstream-updater"
 MAINTAINER_EMAIL="greg+downstream-updater@pantheon.io"
@@ -58,6 +59,14 @@ while [ $# -gt 0 ] ; do
 
     -v|--verbose)
       VERBOSE=true
+      ;;
+
+    --d6)
+      REPO=pantheon-systems/drops-6
+      UPSTREAM_URL=https://github.com/pressflow/6.git
+      RELEASE_URL=https://github.com/pressflow/6/releases/tag
+      VERSION_REQUIRED_PREFIX=pressflow-
+      VERSION_MAJOR=6
       ;;
 
     --force-cleanup)
@@ -552,7 +561,7 @@ then
   echo "$lastCommitComment" | grep -q 'Merge tag.*into'
   if [ $? == 0 ]
   then
-    git commit --amend --author="$BOT_IDENTIFIER" -m "Update to Drupal $availableVersion. For more information, see https://www.drupal.org/project/drupal/releases/$availableVersion."
+    git commit --amend --author="$BOT_IDENTIFIER" -m "Update to Drupal $availableVersion. For more information, see $RELEASE_URL/$availableVersion."
   fi
 fi
 
@@ -588,7 +597,7 @@ if [ -z "$EXISTING_PR_NUMBER" ] || [ "$EXISTING_PR_NUMBER" == "null" ]
 then
   NEW_REPO_PR_INFO_FILE="$TEMP_WORK/new-pr.json"
 
-  BODY="This PR was created by the create-update-pr script.\n\nFor more information, see https://www.drupal.org/project/drupal/releases/$availableVersion\n\nInstructions to test:\n\nCreate a new Drupal 7 site on Pantheon.\nWhen site creation is finished, visit dashboard.\nSwitch to git mode.\nClone your site locally.\nApply the files from this PR on top of your local checkout.\ngit remote add drops-7 git@github.com:pantheon-systems/drops-7.git\ngit fetch drops-7\ngit merge drops-7/$UPDATE_WORKING_BRANCH\nPush your files back up to Pantheon.\nSwitch back to sftp mode.\nVisit your site. Step through the installation process. Look for any problems."
+  BODY="This PR was created by the create-update-pr script.\n\nFor more information, see $RELEASE_URL/$availableVersion\n\nInstructions to test:\n\nCreate a new Drupal $MAJOR_VERSION site on Pantheon.\nWhen site creation is finished, visit dashboard.\nSwitch to git mode.\nClone your site locally.\nApply the files from this PR on top of your local checkout.\ngit remote add drops-$MAJOR_VERSION git@github.com:pantheon-systems/drops-$MAJOR_VERSION.git\ngit fetch drops-$MAJOR_VERSION\ngit merge drops-$MAJOR_VERSION/$UPDATE_WORKING_BRANCH\nPush your files back up to Pantheon.\nSwitch back to sftp mode.\nVisit your site. Step through the installation process. Look for any problems."
 
   # Create the PR on REPO
   create_pull_request "$REPO" "$TITLE" "$BODY" "$REPO_BASE_BRANCH" "$UPDATE_WORKING_BRANCH" "$NEW_REPO_PR_INFO_FILE"

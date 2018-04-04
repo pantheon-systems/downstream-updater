@@ -55,13 +55,18 @@ done
 # Tag and merge the new release
 git checkout master
 git merge $branch
-git commit --amend --author="Pantheon Automation <bot@getpantheon.com>"
+commit_message="$(git log --pretty=format:%s -1)"
+commit_author="$(git log --pretty=format:%an -1)"
+if [[ "$commit_author" != "Pantheon Automation" ]] ; then
+  git commit --amend --author="Pantheon Automation <bot@getpantheon.com>"
+fi
+
+# Add a note to the documentation changelog
+$SELF_DIRNAME/update_changelog --name=Drupal --project=pantheon-systems/drops-7 --version="$version" --message="$commit_message"
+
 git tag $version
 git push origin master
 git push origin $version
-
-# Add a note to the documentation changelog
-$SELF_DIRNAME/update_changelog --name=Drupal --project=pantheon-systems/drops-7 --version="$version"
 
 # Update the pantheon-systems/drops-7-composer version of
 # this upstream, which squashes each release to one commit

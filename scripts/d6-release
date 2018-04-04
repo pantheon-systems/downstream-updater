@@ -2,10 +2,10 @@
 #
 # Usage:
 #
-# $ cd dir_with_updated_d8
-# $ d8-release
+# $ cd dir_with_updated_d6
+# $ d6-release
 #
-# This script assumes that ORIGIN points to pantheon-systems/drops-7
+# This script assumes that ORIGIN points to pantheon-systems/drops-6
 # and the current branch is a PR with a new version.
 #
 SELF_DIRNAME="`dirname -- "$0"`"
@@ -18,7 +18,6 @@ branch=$(git rev-parse --abbrev-ref HEAD)
 # Fail if we are on the master branch
 if [ "$branch" == "master" ]
 then
-  set +ex
   echo "Current branch is master. Run this script from a branch that contains a new version that has not been tagged yet."
   exit 1
 fi
@@ -63,24 +62,8 @@ if [[ "$commit_author" != "Pantheon Automation" ]] ; then
 fi
 
 # Add a note to the documentation changelog
-$SELF_DIRNAME/update_changelog --name=Drupal --project=pantheon-systems/drops-8 --version="$version" --message="$commit_message"
+$SELF_DIRNAME/update_changelog --name=Drupal --project=pantheon-systems/drops-6 --version="$version" --message="$commit_message"
 
 git tag $version
 git push origin master
 git push origin $version
-
-# Update our scaffolding files project too (if it was not pre-tagged)
-$SELF_DIRNAME/create-drops-8-scaffolding
-
-# TODO: Make a pantheon-systems/drupal-core that is just a clone of
-# drupal/core, but tagged after drops-8 is updated.
-
-# Wait for Packagist to be updated with the new version created by the
-# script above. If we do not wait, our call to composer-lock-update
-# will not see our latest update.
-# n.b. pantheon-systems/drupal-core does not exist yet.
-# $SELF_DIRNAME/wait-for-packagist pantheon-systems/drupal-core $version
-
-# Make a PR to update the example-drops-8-composer composer.lock file.
-clu pantheon-systems/example-drops-8-composer
-
