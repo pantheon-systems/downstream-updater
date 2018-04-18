@@ -57,6 +57,7 @@ then
     (
       cd $TARGET_COMPOSER_PROJECT_DIR
       git init
+      git remote add origin $TARGET_COMPOSER_PROJECT_GITHUB
     )
   fi
 else
