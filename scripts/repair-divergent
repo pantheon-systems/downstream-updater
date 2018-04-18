@@ -1,0 +1,45 @@
+# This is not a working script yet.
+# Identify and customize the variable parts below
+# - site name
+# - git clone url for site
+# - pantheon upstream url
+# - last updated version for upstream
+# - name of multidev to push to
+
+
+# Prepare a local copy
+# - 'customer' branch contains all of the customer commits
+# - 'master' branch contains all of Pantheon's WordPress commits
+
+git clone ssh://codeserver.dev.295002e7-d125-4582-a8a0-bead66524e70@codeserver.dev.295002e7-d125-4582-a8a0-bead66524e70.drush.in:2222/~/repository.git darkenergysurvey
+cd darkenergysurvey/
+git remote add pantheon https://github.com/pantheon-systems/WordPress.git
+git checkout -b customer
+git branch -D master
+git fetch pantheon master
+git checkout -b master pantheon/master
+
+
+# Find the last commit in Pantheon upstream that corresponds to
+# the version of WordPress committed in the customer site.
+# Create a 'work' branch to do our work in.
+# TODO: use `terminus wp` to find the right version to use below
+
+git checkout -B work $(git ls-remote --tags pantheon refs/tags/4.8.3 | cut -f 1)
+
+
+# Merge in all of the customer changes that were made since their last
+# WordPress update into the 'work' branch
+
+git merge -Xtheirs customer
+
+
+# Merge in all of the WordPress updates that have happened since the last time
+# the customer updated WordPress core.
+
+git merge master work -s ours
+
+
+# Done! Force-push work branch over our multidev
+
+git push -f origin work:nameofmultidev
