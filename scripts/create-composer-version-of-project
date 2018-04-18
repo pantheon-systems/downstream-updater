@@ -70,18 +70,19 @@ fi
 echo "### Set up target project"
 if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
 then
-  git clone $TARGET_COMPOSER_PROJECT_GITHUB $TARGET_COMPOSER_PROJECT_DIR --branch=master
+  # git clone $TARGET_COMPOSER_PROJECT_GITHUB $TARGET_COMPOSER_PROJECT_DIR --branch=master
   if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
   then
     mkdir -p $TARGET_COMPOSER_PROJECT_DIR
     (
       cd $TARGET_COMPOSER_PROJECT_DIR
       git init
+      git remote add origin $TARGET_COMPOSER_PROJECT_GITHUB
     )
   fi
 else
-  git -C $SOURCE_PROJECT_DIR checkout master
-  git -C $SOURCE_PROJECT_DIR pull
+  git -C $TARGET_COMPOSER_PROJECT_DIR checkout master
+  git -C $TARGET_COMPOSER_PROJECT_DIR pull
 fi
 
 #
