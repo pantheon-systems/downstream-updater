@@ -191,7 +191,7 @@ $DO terminus env:commit $PANTHEON_SITE.$PANTHEON_BRANCH --yes --message="Update 
 # Create a branch for the update
 ###
 git fetch pantheon
-git pull pantheon update --no-edit
+git pull pantheon update -s recursive -X theirs --no-edit
 git checkout $PANTHEON_BRANCH
 git checkout -B update-$UPDATED_VERSION
 current_comment=$(git log --pretty=format:"%s" -1)
