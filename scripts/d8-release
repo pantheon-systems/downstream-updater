@@ -63,7 +63,7 @@ if [[ "$commit_author" != "Pantheon Automation" ]] ; then
 fi
 
 # Add a note to the documentation changelog
-$SELF_DIRNAME/update_changelog --name=Drupal --project=pantheon-systems/drops-8 --version="$version" --message="$commit_message"
+$SELF_DIRNAME/update_changelog --fix --name=Drupal --project=pantheon-systems/drops-8 --version="$version" --message="$commit_message"
 
 git tag $version
 git push origin master

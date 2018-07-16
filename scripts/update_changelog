@@ -8,15 +8,21 @@ $options = getopt(
     'project:',
     'version:',
     'message:',
+    'fix',
   ]
 ) + [
   'message' => '',
+  'fix' => false,
 ];
 
 $project_name = $options['name'];
 $project = $options['project'];
 $version = $options['version'];
 $message = $options['message'];
+
+if ($options['fix']) {
+  $message = preg_replace('#Update to ([^0-9]*[0-9]\.[0-9]\.[0-9])\.#', 'Pantheon has released \1 on the platform.', $message);
+}
 
 $HOME = getenv('HOME');
 $token_cache="$HOME/.config/pantheon-upstream/github-token";
@@ -30,7 +36,15 @@ $documentation_project = 'pantheon-systems/documentation';
 
 function find_changelog_issue($project, $month_index)
 {
-  return find_by_regex("https://api.github.com/repos/$project/issues?state=open", changelog_regex($month_index));
+  $result = find_by_regex("https://api.github.com/repos/$project/issues?state=open", changelog_regex_next($month_index));
+  if ($result) {
+    return $result;
+  }
+  $result = find_by_regex("https://api.github.com/repos/$project/issues?state=open", changelog_regex_both($month_index));
+  if ($result) {
+    return $result;
+  }
+  return find_by_regex("https://api.github.com/repos/$project/issues?state=open", changelog_regex_this($month_index));
 }
 
 function find_pull_request($project, $version)
@@ -69,7 +83,7 @@ function find_paged_by_regex($search, $regex, $page = 1)
   return $result;
 }
 
-function changelog_regex($month_index)
+function changelog_regex_months($month_index)
 {
   $months = [
     'dec', 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan',
@@ -78,7 +92,25 @@ function changelog_regex($month_index)
   $start_month = $months[$month_index];
   $next_month = $months[$month_index+1];
 
+  return [$start_month, $next_month];
+}
+
+function changelog_regex_both($month_index)
+{
+  list($start_month, $next_month) = changelog_regex_months($month_index);
   return "#^${start_month}[a-z]* */${next_month}[a-z]* changelog#i";
+}
+
+function changelog_regex_next($month_index)
+{
+  list($start_month, $next_month) = changelog_regex_months($month_index);
+  return "#^*/${next_month}[a-z]* changelog#i";
+}
+
+function changelog_regex_this($month_index)
+{
+  list($start_month, $next_month) = changelog_regex_months($month_index);
+  return "#^*/${start_month}[a-z]* changelog#i";
 }
 
 function update_version_regex($version)
