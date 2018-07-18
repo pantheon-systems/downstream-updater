@@ -5,6 +5,7 @@
 ###
 test -n "$PANTHEON_SITE" || PANTHEON_SITE=wp-update
 test -n "$PANTHEON_BRANCH" || PANTHEON_BRANCH=update
+test -n "$PANTHEON_UPSTREAM" || PANTHEON_UPSTREAM=git@github.com:pantheon-systems/WordPress.git
 
 # Set the scripts dir if it was not explicitly given to us
 if [ -z "$SCRIPTS_DIR" ]
@@ -69,22 +70,29 @@ then
 fi
 REPO="ssh://codeserver.dev.$PUUID@codeserver.dev.$PUUID.drush.in:2222/~/repository.git"
 
-if [ ! -d "$PANTHEON_SITE" ] ; then
-    git clone "$REPO" "$PANTHEON_SITE"
-    cd "$PANTHEON_SITE"
-    git remote rename origin pantheon
-    git remote add origin git@github.com:pantheon-systems/WordPress.git
-else
-    cd "$PANTHEON_SITE"
-    git checkout master
+# If our cwd is already in a copy of our work site, then we're good
+if [ "$(basename $(pwd))" != "$PANTHEON_SITE" ] ; then
+  # Don't check out if we're inside some other project
+  if [ -d .git ] ; then
+    echo 'Change your cwd to a work directory first; do not run from an existing project' >&2
+    exit 1
+  fi
+  # If our project isn't already checked out here, then make a clone
+  if [ ! -d "$PANTHEON_SITE" ] ; then
+      git clone "$REPO" "$PANTHEON_SITE"
+      cd "$PANTHEON_SITE"
+      git remote rename origin pantheon
+      git remote add origin $PANTHEON_UPSTREAM
+  else
+      cd "$PANTHEON_SITE"
+      git checkout master
+  fi
 fi
 
 ###
-# Apply upstream updates to the dev branch of the update site using git
+# Apply old upstream updates to the dev branch of the update site using git
 ###
 $DO git pull origin master --no-edit
-
-
 
 ###
 # Switch to an 'update' branch
@@ -116,7 +124,7 @@ fi
 ###
 # Create the 'update' environment for our use.
 ###
-echo $DO terminus multidev:create $PANTHEON_SITE.dev $PANTHEON_BRANCH
+$DO terminus --yes env:info $PANTHEON_SITE.$PANTHEON_BRANCH 2>/dev/null || $DO terminus --yes multidev:create $PANTHEON_SITE.dev $PANTHEON_BRANCH
 PANTHEON_GIT_URL=$(terminus connection:info --field=git_url $PANTHEON_SITE.$PANTHEON_BRANCH)
 
 ###
@@ -188,14 +196,25 @@ release_url=$(curl https://wordpress.org/news/ 2>/dev/null | grep "<a [^>]*>Word
 $DO terminus env:commit $PANTHEON_SITE.$PANTHEON_BRANCH --yes --message="Update to WordPress $UPDATED_VERSION. For more information, see $release_url"
 
 ###
-# Create a branch for the update
+# Create a branch for the update. We will start with the "default" branch, which
+# is master + test (includes the .circleci directory).
 ###
 git fetch pantheon
-git pull pantheon update -s recursive -X theirs --no-edit
-git checkout $PANTHEON_BRANCH
-git checkout -B update-$UPDATED_VERSION
+git fetch origin
+git pull pantheon $PANTHEON_BRANCH -s recursive -X theirs --no-edit
 current_comment=$(git log --pretty=format:"%s" -1)
 git commit --amend --author="Pantheon Automation <bot@getpantheon.com>" -m "$current_comment"
+update_commit=$(git rev-parse HEAD)
+git checkout default
+git rebase origin/master
+git push --force origin default
+git checkout -B update-$UPDATED_VERSION default
+git cherry-pick $update_commit
+
+###
+# Merge in the test scripts (.circleci/config.yml & c.) from the 'test' branch.
+# This material will be removed when the PR is merged back
+###
 git push origin update-$UPDATED_VERSION
 
 ###
