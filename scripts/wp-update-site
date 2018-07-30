@@ -28,6 +28,11 @@ while [ $# -gt 0 ] ; do
     --nightly)
       UPDATE_TO_VERSION='--version=nightly'
       ;;
+    --version)
+      v="$1"
+      shift
+      UPDATE_TO_VERSION="--version=$v"
+      ;;
   esac
 done
 
@@ -245,7 +250,7 @@ EOT
 ###
 # Create a pull request for the update
 ###
-pr_url=$(hub pull-request -F $commit_message)
+pr_url=$(hub pull-request -F $commit_message -b default)
 echo $pr_url
 
 # TODO: look up CIRCLE_BUILD from the $pr_url
