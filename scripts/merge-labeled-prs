@@ -290,7 +290,7 @@ then
           COMMIT_COMMENT_FILE="$TEMP_WORK/commit-comment-$PR_NUMBER.txt"
 
           cat << __EOF__ > "$COMMIT_COMMENT_FILE"
-#$PR_NUMBER: $PR_TITLE [$LABEL]
+#$PR_NUMBER: $PR_TITLE
 
 Including pull request $PR_GITHUB_URL in branch $UPDATE_WORKING_BRANCH.
 __EOF__
@@ -307,7 +307,7 @@ __EOF__
 
             echo
 
-            $DO git checkout -b $PR_WORKING_BRANCH $REPO_BASE_BRANCH
+            $DO git checkout -B $PR_WORKING_BRANCH $REPO_BASE_BRANCH
             $DO git pull $PR_REPO $PR_BRANCH --no-edit
 
             $DO git checkout "$UPDATE_WORKING_BRANCH"
