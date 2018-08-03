@@ -177,7 +177,7 @@ $DP terminus wp $PANTHEON_SITE.$PANTHEON_BRANCH -- core update-db 2>/dev/null
 # WORKAROUND: We need to hit the dashboard to refresh the files available to commit
 # https://github.com/pantheon-systems/terminus/issues/1115
 ###
-terminus dashboard $PANTHEON_SITE.$PANTHEON_BRANCH
+terminus dashboard $PANTHEON_SITE.$PANTHEON_BRANCH # --admin would be nice
 
 # More prudence
 sleep 10
@@ -207,14 +207,50 @@ $DO terminus env:commit $PANTHEON_SITE.$PANTHEON_BRANCH --yes --message="Update 
 git fetch pantheon
 git fetch origin
 git pull pantheon $PANTHEON_BRANCH -s recursive -X theirs --no-edit
+
+
+
+
+
+# TODO: If top commit is a merge commit, then we should take current_comment
+# from the second commit down and use 'git commit --amend' to duplicate this comment over
+# the top commit.
 current_comment=$(git log --pretty=format:"%s" -1)
 git commit --amend --author="Pantheon Automation <bot@getpantheon.com>" -m "$current_comment"
+
+
+
+
+
+
+
 update_commit=$(git rev-parse HEAD)
 git checkout default
 git rebase origin/master
 git push --force origin default
 git checkout -B update-$UPDATED_VERSION default
-git cherry-pick $update_commit
+# git cherry-pick $update_commit
+git merge "$PANTHEON_BRANCH" -m "$current_comment"
+
+
+
+
+
+
+# TODO: At this point, the commit tree looks something like:
+#
+# user [merge commit]
+# Pantheon Automation Update to WordPress #.#.#. For more information, see https://wordpress.org/news/...
+# user [merge commit]
+#
+# To fix this up, squash:
+# git reset [sha]
+# git add .
+# git commit -m "Update to WordPress ..." --author='Pantheon Automation <bot@getpantheon.com>'
+
+
+
+
 
 ###
 # Merge in the test scripts (.circleci/config.yml & c.) from the 'test' branch.
