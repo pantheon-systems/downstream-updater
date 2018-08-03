@@ -62,12 +62,12 @@ if [[ "$commit_author" != "Pantheon Automation" ]] ; then
   git commit --amend --author="Pantheon Automation <bot@getpantheon.com>"
 fi
 
-# Add a note to the documentation changelog
-$SELF_DIRNAME/update_changelog --fix --name=Drupal --project=pantheon-systems/drops-8 --version="$version" --message="$commit_message"
-
 git tag $version
 git push origin master
 git push origin $version
+
+# Add a note to the documentation changelog
+$SELF_DIRNAME/update_changelog --fix --name=Drupal --project=pantheon-systems/drops-8 --version="$version" --message="$commit_message"
 
 # Update our scaffolding files project too (if it was not pre-tagged)
 $SELF_DIRNAME/create-drops-8-scaffolding
@@ -84,3 +84,13 @@ $SELF_DIRNAME/create-drops-8-scaffolding
 # Make a PR to update the example-drops-8-composer composer.lock file.
 clu pantheon-systems/example-drops-8-composer
 
+# TODO: Maybe post a list of links somewhere, maybe on the original PR?
+# List of links should be similar to:
+#
+# drops-8: https://github.com/pantheon-systems/drops-8/tree/8.5.6
+# example-drops-8-composer: https://github.com/pantheon-systems/example-drops-8-composer/pull/162
+# drops-8-scaffolding: https://github.com/pantheon-systems/drops-8-scaffolding/tree/8.5.6
+# changelog: https://github.com/pantheon-systems/documentation/issues/3850#issuecomment-409735689
+# status page: https://status.pantheon.io/incidents/r6crg6fzz2nd
+#
+# Ideally this would go on the JIRA card, if we have an API for modifying that.
