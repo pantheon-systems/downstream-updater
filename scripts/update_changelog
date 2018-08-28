@@ -141,7 +141,7 @@ $changelog_issue_number = $changelog_issue['number'];
 
 print "Changelog URL is $changelog_url\n";
 
-$commit_message = "## $project_name $version";
+$commit_message = "### $project_name $version";
 
 if (!empty($pr)) {
   $pr_url = $pr['html_url'];
