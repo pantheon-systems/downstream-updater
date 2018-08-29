@@ -17,6 +17,8 @@ PARENT_DIRNAME="`dirname -- "$SELF_DIRNAME"`"
 SOURCE_PROJECT=drops-8
 TARGET_PROJECT=drops-8-scaffolding
 MAJOR_VERSION=8
+BUILD_DIR=build
+TAG=''
 DO=
 
 while [ $# -gt 0 ] ; do
@@ -30,6 +32,16 @@ while [ $# -gt 0 ] ; do
       DO=echo
       ;;
 
+    --build-dir)
+      BUILD_DIR="$1"
+      shift
+      ;;
+
+    --tag)
+      TAG="$1"
+      shift
+      ;;
+
     *)
       echo "Parameters are not used; '$option' is invalid."
       exit 1;
@@ -38,8 +50,8 @@ while [ $# -gt 0 ] ; do
 done
 
 
-SOURCE_PROJECT_DIR=build/$SOURCE_PROJECT
-TARGET_COMPOSER_PROJECT_DIR=build/$TARGET_PROJECT
+SOURCE_PROJECT_DIR=$BUILD_DIR/$SOURCE_PROJECT
+TARGET_COMPOSER_PROJECT_DIR=$BUILD_DIR/$TARGET_PROJECT
 
 SOURCE_PROJECT_GITHUB="git@github.com:pantheon-systems/${SOURCE_PROJECT}.git"
 TARGET_COMPOSER_PROJECT_GITHUB="git@github.com:pantheon-systems/${TARGET_PROJECT}.git"
@@ -81,7 +93,11 @@ fi
 # Get a list of all of the SEMVER tags for the desired major version available
 # in $SOURCE_PROJECT_DIR, sorted.
 #
-tags=$(git -C $SOURCE_PROJECT_DIR tag -l | grep "^$MAJOR_VERSION\.[0-9.]*$" | sort -t. -n --key=2)
+if [ -n "$TAG" ] ; then
+  tags="$TAG"
+else
+  tags=$(git -C $SOURCE_PROJECT_DIR tag -l | grep "^$MAJOR_VERSION\.[0-9.]*$" | sort -t. -n --key=2)
+fi
 echo "Tags are: $tags"
 
 set -x

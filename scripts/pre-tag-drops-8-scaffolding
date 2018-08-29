@@ -20,6 +20,8 @@ TARGET_PROJECT_REPO="git@github.com:pantheon-systems/${TARGET_PROJECT}.git"
 
 MAJOR_VERSION=8
 DO=
+BUILD_DIR=build
+ADDITIONAL_TAG=
 
 while [ $# -gt 0 ] ; do
 
@@ -32,6 +34,16 @@ while [ $# -gt 0 ] ; do
       DO=echo
       ;;
 
+    --build-dir)
+      BUILD_DIR="$1"
+      shift
+      ;;
+
+    --additional-tag)
+      ADDITIONAL_TAG="$1"
+      shift
+      ;;
+
     *)
       echo "Parameters are not used; '$option' is invalid."
       exit 1;
@@ -39,8 +51,8 @@ while [ $# -gt 0 ] ; do
   esac
 done
 
-SOURCE_PROJECT_DIR=build/$SOURCE_PROJECT
-TARGET_COMPOSER_PROJECT_DIR=build/$TARGET_PROJECT
+SOURCE_PROJECT_DIR=$BUILD_DIR/$SOURCE_PROJECT
+TARGET_COMPOSER_PROJECT_DIR=$BUILD_DIR/$TARGET_PROJECT
 
 #
 # Make our target repository $TARGET_COMPOSER_PROJECT_DIR if it does not already exist
@@ -48,6 +60,7 @@ TARGET_COMPOSER_PROJECT_DIR=build/$TARGET_PROJECT
 echo "### Set up target project"
 if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
 then
+  echo git clone $TARGET_PROJECT_REPO $TARGET_COMPOSER_PROJECT_DIR --branch=$SOURCE_BRANCH
   git clone $TARGET_PROJECT_REPO $TARGET_COMPOSER_PROJECT_DIR --branch=$SOURCE_BRANCH
   if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
   then
@@ -68,6 +81,7 @@ fi
 echo "### Set up source project"
 if [ ! -d $SOURCE_PROJECT_DIR ]
 then
+  echo git clone $SOURCE_PROJECT_REPO $SOURCE_PROJECT_DIR
   git clone $SOURCE_PROJECT_REPO $SOURCE_PROJECT_DIR
 else
   (
@@ -89,7 +103,7 @@ echo "Tags are: $tags"
 #
 echo "### Process tags"
 lasttag=''
-for tag in $tags ; do
+for tag in $tags $ADDITIONAL_TAG ; do
   if [[ -n "$lasttag" ]]
   then
     echo "------------- $tag updated from $lasttag-------------"

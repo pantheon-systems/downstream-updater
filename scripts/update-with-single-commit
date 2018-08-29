@@ -72,7 +72,7 @@ $options = getopt ("dv", array(
   'update-base' => 'update-base',
   'merge-label' => 'shipit',
   'release' => '',
-  'main-branch' => 'master',
+  'main-branch' => 'default',
 );
 
 $options += array(
@@ -114,6 +114,8 @@ $mergerepo_path = $project_cache . '/' . $mergerepo_name;
 
 // TODO: build from the $mergerepo_url
 $mergerepo_upstream_remote = "drupal-org";
+
+$BUILD_DIR=dirname($project_dir_to_update) . '/drops-8-build';
 
 do_exec("git config --get remote.origin.url", $remoteurl_output, $status);
 $repo_url=$remoteurl_output[0];
@@ -235,10 +237,15 @@ if (!empty($checkTagOutput) && !$dev) {
 print "----------------------------------------------------------------------------------\n";
 print "Check to see if new tag has changes to scaffold files; we will pre-tag drops-8-scaffolding if not.\n";
 
-do_passthru(__DIR__ . '/pre-tag-drops-8-scaffolding');
+$additional_tag = '';
+if ($allow_beta) {
+  $additional_tag = '--additional-tag ' . $available_version;
+}
+do_passthru(__DIR__ . "/pre-tag-drops-8-scaffolding --build-dir $BUILD_DIR $additional_tag");
 
 
 print "----------------------------------------------------------------------------------\n";
+
 print "About to update to $available_version\n";
 
 $drops8_work_dir = do_exec("mktemp -d $project_cache/update-drops8-tmp.XXX", $unused_output, $unused_status);
@@ -348,9 +355,14 @@ do_passthru("git branch -D $pr_merge_branch");
 // This effectively makes a new working git repo just like the local one in the remote location, but with
 // all files in the target already in their desired state. Git will figure out the diffs.
 
-do_passthru("git checkout -B update-$available_version_label");
+do_passthru("git checkout -B update-$available_version_label $main_branch");
 do_passthru("rsync -raqz .git $drops8TargetPath");
 do_passthru("git checkout $main_branch");
+
+// Copy the .circleci tests over too
+if (is_dir(".circleci")) {
+  do_passthru("rsync -raqz .circleci $drops8TargetPath");
+}
 
 // STEP 7: Add a single commit to the branch
 
@@ -413,11 +425,22 @@ EOT;
 file_put_contents($PR_message_file, $PR_message_text);
 
 do_passthru("git -C $drops8TargetPath push --tags origin update-$available_version_label");
-do_passthru("hub -C $drops8TargetPath pull-request -F $PR_message_file");
+do_passthru("hub -C $drops8TargetPath pull-request -b $main_branch -F $PR_message_file");
 
 unlink($PR_message_file);
 
 print "\n\nDONE. Please look for the pull request on GitHub.\n";
+
+if ($allow_beta) {
+  print "----------------------------------------------------------------------------------\n";
+  print "Pre-tag scaffolding files for pre-releases.\n";
+
+  // We'll just drop our tag on the test branch
+  do_passthru("git tag $available_version_label update-$available_version_label");
+  do_passthru("git push origin $available_version_label");
+
+  do_passthru(__DIR__ . "/create-drops-8-scaffolding --build-dir $BUILD_DIR --tag $available_version");
+}
 
 exit(0);
 
