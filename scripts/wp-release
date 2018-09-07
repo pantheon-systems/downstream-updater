@@ -6,7 +6,7 @@
 # $ wp-release
 #
 # This script assumes that ORIGIN points to pantheon-systems/WordPress
-# and the current branch is a PR with a new version.
+# and the current branch is master with the current release already merged.
 #
 SELF_DIRNAME="`dirname -- "$0"`"
 

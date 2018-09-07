@@ -5,8 +5,8 @@
 # $ cd dir_with_updated_d8
 # $ d8-release
 #
-# This script assumes that ORIGIN points to pantheon-systems/drops-7
-# and the current branch is a PR with a new version.
+# This script assumes that ORIGIN points to pantheon-systems/drops-8
+# and the current branch is the master branch, with the newest version merged.
 #
 SELF_DIRNAME="`dirname -- "$0"`"
 
@@ -15,11 +15,17 @@ set -ex
 # Get the current branch
 branch=$(git rev-parse --abbrev-ref HEAD)
 
-# Fail if we are on the master branch
-if [ "$branch" == "master" ]
+# If we're on the default branch, switch to master and pull.
+if [ "$branch" == "default" ]
 then
-  set +ex
-  echo "Current branch is master. Run this script from a branch that contains a new version that has not been tagged yet."
+  git checkout master
+  git pull origin master
+fi
+
+# Require the master branch
+if [ "$branch" != "master" ]
+then
+  echo "Current branch must be master. Merge the update PR in GitHub before running this script."
   exit 1
 fi
 
@@ -53,17 +59,10 @@ for tag in $non_semver ; do
   git tag -d $tag
 done
 
-# Tag and merge the new release
-git checkout master
-git merge $branch
 commit_message="$(git log --pretty=format:%s -1)"
-commit_author="$(git log --pretty=format:%an -1)"
-if [[ "$commit_author" != "Pantheon Automation" ]] ; then
-  git commit --amend --author="Pantheon Automation <bot@getpantheon.com>"
-fi
 
+# Tag the new release
 git tag $version
-git push origin master
 git push origin $version
 
 # Add a note to the documentation changelog
