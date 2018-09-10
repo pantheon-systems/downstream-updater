@@ -20,6 +20,7 @@ if [ "$branch" == "default" ]
 then
   git checkout master
   git pull origin master
+  branch=master
 fi
 
 # Require the master branch
@@ -93,3 +94,7 @@ clu pantheon-systems/example-drops-8-composer
 # status page: https://status.pantheon.io/incidents/r6crg6fzz2nd
 #
 # Ideally this would go on the JIRA card, if we have an API for modifying that.
+
+
+# Back to default
+git checkout default
