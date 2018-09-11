@@ -1,0 +1,96 @@
+#!/bin/bash
+
+#
+# Default option values
+#
+
+ROLLBACK=false
+VERBOSE=false
+DEBUG=false
+DO=
+COOKBOOKS=
+
+#
+# Parse command line args
+#
+while [ $# -gt 0 ] ; do
+
+  option="$1"
+  shift
+
+  case "$option" in
+    -d|--debug)
+      debug=true
+      ;;
+
+    -s|--simulate)
+      DO=echo
+      ;;
+
+    -v|--verbose)
+      VERBOSE=true
+      ;;
+
+    --rollback|--undo|-r|-u)
+      ROLLBACK=true
+      ;;
+
+    -*)
+      echo "Unknown option $option"
+      exit 1
+      ;;
+
+    *)
+      COOKBOOKS="$option $COOKBOOKS"
+      ;;
+  esac
+done
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#    Rollback
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+if $ROLLBACK ; then
+
+  # Verify rollback
+
+  for cook in $COOKBOOKS ; do
+    if [ ! -d "/opt/pantheon/infrastructure/cookbooks/$cook-bak" ] ; then
+      echo "The cookbook $cook has not been symlinked, so it cannot be rolled back"
+      exit 1
+    fi
+  done
+
+  # Do rollback
+
+  for cook in $COOKBOOKS ; do
+    $DO mv -f "/opt/pantheon/infrastructure/cookbooks/$cook-bak" "/opt/pantheon/infrastructure/cookbooks/$cook"
+  done
+
+  exit 0
+
+fi
+
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+#
+#    YOLO
+#
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+# Verify YOLO
+
+for cook in $COOKBOOKS ; do
+  if [ ! -d "$HOME/infrastructure/pantheon-cookbooks/$cook" ] ; then
+    echo "Cannot find cookbook $cook"
+    exit 1
+  fi
+done
+
+# Do YOLO
+
+for cook in $COOKBOOKS ; do
+  $DO mv "/opt/pantheon/infrastructure/cookbooks/$cook" "/opt/pantheon/infrastructure/cookbooks/$cook-bak"
+  $DO ln -s "$HOME/infrastructure/pantheon-cookbooks/$cook" "/opt/pantheon/infrastructure/cookbooks/$cook"
+done
