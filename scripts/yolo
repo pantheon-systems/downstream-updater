@@ -1,6 +1,22 @@
 #!/bin/bash
 
 #
+# Usage:
+#
+#   yolo -l                     Show cookbooks that have been yolo'ed
+#
+#   sudo -E yolo endpoint       Yolo the endpoint cookbook
+#
+#   sudo -E yolo endpoint -u    Stop yolo-ing the endpoint cookbook
+#
+#
+# Be sure to 'disable.autochef' before yolo-ing, and 'enable.autochef' again
+# when done.
+#
+# Run 'sudo chef-solo' after yolo-ing a cookbook
+#
+
+#
 # Default option values
 #
 
@@ -9,6 +25,12 @@ VERBOSE=false
 DEBUG=false
 DO=
 COOKBOOKS=
+SIMULATE=false
+
+if [ "$HOME" == "/root" ] ; then
+  echo "Run with 'sudo -E'"
+  exit 1
+fi
 
 #
 # Parse command line args
@@ -24,7 +46,14 @@ while [ $# -gt 0 ] ; do
       ;;
 
     -s|--simulate)
+      SIMULATE=true
       DO=echo
+      ;;
+
+    -l|--list)
+      echo "/opt/pantheon/infrastructure/cookbooks:"
+      ls -l "/opt/pantheon/infrastructure/cookbooks"
+      exit 0
       ;;
 
     -v|--verbose)
@@ -57,15 +86,39 @@ if $ROLLBACK ; then
   # Verify rollback
 
   for cook in $COOKBOOKS ; do
-    if [ ! -d "/opt/pantheon/infrastructure/cookbooks/$cook-bak" ] ; then
+    if [ ! -h "/opt/pantheon/infrastructure/cookbooks/$cook-bak" ] ; then
       echo "The cookbook $cook has not been symlinked, so it cannot be rolled back"
+      exit 1
+    fi
+    if [ ! -d "/opt/pantheon/infrastructure/cookbooks/$cook-bak" ] ; then
+      echo "The cookbook $cook does not have a backup, so it cannot be rolled back"
       exit 1
     fi
   done
 
+  # confirm rollback
+
+  if [ $SIMULATE == false ] ; then
+
+    for cook in $COOKBOOKS ; do
+      echo mv -f "/opt/pantheon/infrastructure/cookbooks/$cook-bak" "/opt/pantheon/infrastructure/cookbooks/$cook"
+    done
+
+    while true; do
+        read -p "Does that look right?" yn
+        case $yn in
+            [Yy]* ) echo;;
+            [Nn]* ) exit;;
+            * ) echo "Please answer yes or no.";;
+        esac
+    done
+
+  fi
+
   # Do rollback
 
   for cook in $COOKBOOKS ; do
+    $DO rm -f "/opt/pantheon/infrastructure/cookbooks/$cook"
     $DO mv -f "/opt/pantheon/infrastructure/cookbooks/$cook-bak" "/opt/pantheon/infrastructure/cookbooks/$cook"
   done
 
@@ -86,11 +139,39 @@ for cook in $COOKBOOKS ; do
     echo "Cannot find cookbook $cook"
     exit 1
   fi
+  if [ -h "/opt/pantheon/infrastructure/cookbooks/$cook" ] ; then
+    echo "The cookbook $cook is already symlinked:"
+    ls -l "/opt/pantheon/infrastructure/cookbooks/$cook"
+    exit 1
+  fi
 done
+
+# Confirm YOLO
+
+if [ $SIMULATE == false ] ; then
+
+  for cook in $COOKBOOKS ; do
+    echo mv "/opt/pantheon/infrastructure/cookbooks/$cook" "/opt/pantheon/infrastructure/cookbooks/$cook-bak"
+    echo ln -s "$HOME/infrastructure/pantheon-cookbooks/$cook" "/opt/pantheon/infrastructure/cookbooks/$cook"
+  done
+
+  while true; do
+      read -p "Does that look right?" yn
+      case $yn in
+          [Yy]* ) echo;;
+          [Nn]* ) exit;;
+          * ) echo "Please answer yes or no.";;
+      esac
+  done
+
+fi
 
 # Do YOLO
 
 for cook in $COOKBOOKS ; do
   $DO mv "/opt/pantheon/infrastructure/cookbooks/$cook" "/opt/pantheon/infrastructure/cookbooks/$cook-bak"
   $DO ln -s "$HOME/infrastructure/pantheon-cookbooks/$cook" "/opt/pantheon/infrastructure/cookbooks/$cook"
+  if [ ! $SIMULATE ] ; then
+    $DO ls -l "/opt/pantheon/infrastructure/cookbooks/$cook"
+  fi
 done
