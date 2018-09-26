@@ -285,6 +285,7 @@ do_passthru("$merge_labeled_prs");
 $filesToCopy = [
   '.drush-lock-update',
   '.gitignore',
+  'pantheon.upstream.yml',
   'drush/example.drushrc.php',
   'sites/default/config/.htaccess',
   'sites/default/config/README.txt',
