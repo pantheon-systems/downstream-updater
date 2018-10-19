@@ -24,7 +24,7 @@ MAINTAINER_EMAIL="greg+downstream-updater@pantheon.io"
 VERSION_REQUIRED_PREFIX=
 VERSION_MAJOR=
 VERSION_PATTERN=
-REPO_BASE_BRANCH=master
+REPO_BASE_BRANCH=default
 SCRIPTS_DIR=
 TOKEN_CACHE="$HOME/.config/pantheon-upstream/github-token"
 RELEASE_NODE=
@@ -174,7 +174,7 @@ while [ $# -gt 0 ] ; do
       MERGE_FLAGS=-Xtheirs
       ;;
 
-    # --base master: the branch to start from
+    # --base default: the branch to start from
     --base)
       REPO_BASE_BRANCH="$1"
       shift
