@@ -15,10 +15,18 @@ set -ex
 # Get the current branch
 branch=$(git rev-parse --abbrev-ref HEAD)
 
-# Fail if we are on the master branch
-if [ "$branch" == "master" ]
+# If we're on the default branch, switch to master and pull.
+if [ "$branch" == "default" ]
 then
-  echo "Current branch is master. Run this script from a branch that contains a new version that has not been tagged yet."
+  git checkout master
+  git pull origin master
+  branch=master
+fi
+
+# Require the master branch
+if [ "$branch" != "master" ]
+then
+  echo "Current branch must be master. Merge the update PR in GitHub before running this script."
   exit 1
 fi
 
@@ -52,17 +60,16 @@ for tag in $non_semver ; do
   git tag -d $tag
 done
 
-# Tag and merge the new release
-git checkout master
-git merge $branch
 commit_message="$(git log --pretty=format:%s -1)"
-commit_author="$(git log --pretty=format:%an -1)"
-if [[ "$commit_author" != "Pantheon Automation" ]] ; then
-  git commit --amend --author="Pantheon Automation <bot@getpantheon.com>"
-fi
 
 # Add a note to the documentation changelog
 $SELF_DIRNAME/update_changelog --fix --name=Drupal --project=pantheon-systems/drops-7 --version="$version" --message="$commit_message"
+
+# Look up the release URL from the commit comment
+release_url="$(echo "$commit_message" | sed -e 's#.*\(https://.*\)#\1#')"
+
+# Post a security notification to statuspage if this is a security release
+$SELF_DIRNAME/statuspage --release-url="$release_url"
 
 git tag $version
 git push origin master

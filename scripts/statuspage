@@ -1,0 +1,131 @@
+#!/usr/bin/env php
+<?php
+
+$options = getopt(
+  "dv",
+  [
+    'name:',
+    'status:',
+    'component:',
+    'version:',
+    'release-org:',
+    'release-url:',
+    'message:',
+    'fix',
+  ]
+) + [
+  'name' => '',
+  'component' => '',
+  'upstream-org' => '',
+  'message' => '',
+  'version' => '',
+  'release-url' => '',
+  'status' => 'resolved',
+];
+
+$incident_name = $options['name'];
+$incident_status = $options['status'];
+$message = $options['message'];
+$release_url = $options['release-url'];
+$component = $options['component'];
+$upstream_org = $options['upstream-org'];
+$version = $options['version'];
+$sa_name = '';
+$sa_url = '';
+
+// Derive component, upstream_org and version from the release URL if they were mot provided.
+if (empty($version) && !empty($release_url)) {
+  $version = preg_replace('#.*/#', '', $release_url);
+}
+if (empty($upstream_org) && !empty($release_url)) {
+  $upstream_org = preg_replace('#^[^/]*//(www\.|)#', '', $release_url);
+  $upstream_org = ucfirst(preg_replace('#/.*#', '', $upstream_org));
+}
+if (empty($component)) {
+  $component = preg_replace('#\..*#', '', $upstream_org);
+}
+
+if (!empty($release_url)) {
+  exec("curl $release_url", $output, $status);
+
+  $release_contents = implode("\n", $output);
+  if (preg_match_all('#<a[^>]*href="([^"]*)"[^>]*>([^<]*)(SA-CORE-[^<]*)</a>#', $release_contents, $matches, PREG_SET_ORDER)) {
+    // TODO: handle multiple vulnerabilities
+    foreach ($matches as $match_set) {
+      $sa_title = trim($match_set[2]);
+      $sa_name = $match_set[3];
+      $sa_url = $match_set[1];
+    }
+  }
+}
+
+// Exit early if this is not a security release.
+if (empty($sa_url)) {
+  print "Not a security release; omitting status page.\n";
+  exit(0);
+}
+
+// Use generic template
+if (empty($message)) {
+  $message=<<<EOT
+{upstream-org} has released {component} version {version}. This release is classified as a security release for all previous versions of {component}.[1] Pantheon has made the update available for one-click update in site dashboards. We urge all users to update all environments as soon as possible. Instructions for applying core updates can be found in our Support Center.[2] This release addresses {sa-name}[3]; all users are urged to upgrade their sites as soon as possible.
+
+  [1] - {release-url}
+  [2] - {upstream-updates-url}
+  [3] - {sa-url}
+EOT;
+}
+
+if (empty($incident_name)) {
+  $incident_name = 'Status update for {component} {version}';
+}
+
+$replacements = [
+  '{upstream-org}' => $upstream_org,
+  '{component}' => $component,
+  '{version}' => $version,
+  '{release-url}' => $release_url,
+  '{upstream-updates-url}' => 'https://pantheon.io/docs/upstream-updates/',
+  '{sa-name}' => $sa_name,
+  '{sa-url}' => $sa_url,
+];
+
+$replacements = array_filter($replacements);
+$message = str_replace(array_keys($replacements), array_values($replacements), $message);
+$incident_name = str_replace(array_keys($replacements), array_values($replacements), $incident_name);
+
+if (strpos("$incident_name $message", '{') !== false) {
+  print "!!!!!!!!!!!!!!! STATUS PAGE NOT POSTED !!!!!!!!!!!!!!!\n\nNot all placeholders in message were replaced.\n\nTemplate:\n\n$incident_name\n\n$message\n";
+  exit(1);
+}
+
+$HOME = getenv('HOME');
+$token_cache="$HOME/.config/pantheon-upstream/statuspage-token";
+if (is_file($token_cache)) {
+  $token = file_get_contents($token_cache);
+}
+if (empty($token)) {
+  $token = getenv('STATUSPAGE_TOKEN');
+}
+
+$page_id="80f0zgsx80zh";
+$org_id="5p5f33w3857z";
+
+exec("curl https://api.statuspage.io/v1/pages/$page_id/incidents.json \
+    -H 'Authorization: OAuth $token' \
+    -X POST \
+    -d 'incident[name]=$incident_name' \
+    -d 'incident[status]=$incident_status' \
+    -d 'incident[wants_twitter_update]=t' \
+    -d 'incident[body]=$message' \
+    -d 'incident[deliver_notifications]=true'", $status_output, $status);
+
+// TODO: Process output
+print(implode("\n", $status_output));
+
+
+/*
+
+{"id":"9cklbmxrrpsg","created_at":"2018-10-19T18:53:25Z","impact":"none","impact_override":null,"incident_updates":[{"id":"zxgfcmlrcsdl","incident_id":"9cklbmxrrpsg","affected_components":null,"body":"Drupal.org has released Drupal version 7.60. This release is classified as a security release for all previous versions of Drupal.[1] Pantheon has made the update available for one-click update in site dashboards. We urge all users to update all environments as soon as possible. Instructions for applying core updates can be found in our Support Center.[2] This release addresses SA-CORE-2018-006[3]; all users are urged to upgrade their sites as soon as possible.\n\n  [1] - https://www.drupal.org/project/drupal/releases/7.60\n  [2] - https://pantheon.io/docs/upstream-updates/\n  [3] - https://www.drupal.org/SA-CORE-2018-006","created_at":"2018-10-19T18:53:25.830Z","custom_tweet":null,"deliver_notifications":true,"display_at":"2018-10-19T11:53:25.830-07:00","status":"resolved","tweet_id":null,"twitter_updated_at":null,"updated_at":"2018-10-19T18:53:25.830Z","wants_twitter_update":true}],"metadata":{},"monitoring_at":null,"name":"Status update for Drupal 7.60","page_id":"80f0zgsx80zh","postmortem_body":null,"postmortem_body_last_updated_at":null,"postmortem_ignored":false,"postmortem_notified_subscribers":false,"postmortem_notified_twitter":false,"postmortem_published_at":null,"resolved_at":"2018-10-19T18:53:25Z","scheduled_auto_completed":false,"scheduled_auto_in_progress":false,"scheduled_for":null,"scheduled_remind_prior":false,"scheduled_reminded_at":null,"scheduled_until":null,"shortlink":"http://stspg.io/60fb74979","status":"resolved","updated_at":"2018-10-19T18:53:25Z"}
+
+*/

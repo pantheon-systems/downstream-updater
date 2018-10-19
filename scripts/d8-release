@@ -69,6 +69,12 @@ git push origin $version
 # Add a note to the documentation changelog
 $SELF_DIRNAME/update_changelog --fix --name=Drupal --project=pantheon-systems/drops-8 --version="$version" --message="$commit_message"
 
+# Look up the release URL from the commit comment
+release_url="$(echo "$commit_message" | sed -e 's#.*\(https://.*\)#\1#')"
+
+# Post a security notification to statuspage if this is a security release
+$SELF_DIRNAME/statuspage --release-url="$release_url"
+
 # Update our scaffolding files project too (if it was not pre-tagged)
 $SELF_DIRNAME/create-drops-8-scaffolding
 
