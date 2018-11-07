@@ -12,6 +12,7 @@ $options = getopt(
     'release-url:',
     'message:',
     'fix',
+    'simulate',
   ]
 ) + [
   'name' => '',
@@ -30,6 +31,7 @@ $release_url = $options['release-url'];
 $component = $options['component'];
 $upstream_org = $options['upstream-org'];
 $version = $options['version'];
+$simulate = array_key_exists('simulate', $options);
 $sa_name = '';
 $sa_url = '';
 
@@ -40,12 +42,19 @@ if (empty($version) && !empty($release_url)) {
 if (empty($upstream_org) && !empty($release_url)) {
   $upstream_org = preg_replace('#^[^/]*//(www\.|)#', '', $release_url);
   $upstream_org = ucfirst(preg_replace('#/.*#', '', $upstream_org));
+  // Special checking: use the correct case for WordPress
+  $upstream_org = str_replace('Wordpress', 'WordPress', $upstream_org);
 }
 if (empty($component)) {
   $component = preg_replace('#\..*#', '', $upstream_org);
 }
 
+print "Componente: $component\nRelease url: $release_url\n";
+
+/*
+// Old way to check Drupal releases (obsolete)
 if (!empty($release_url)) {
+
   exec("curl $release_url", $output, $status);
 
   $release_contents = implode("\n", $output);
@@ -55,6 +64,20 @@ if (!empty($release_url)) {
       $sa_title = trim($match_set[2]);
       $sa_name = $match_set[3];
       $sa_url = $match_set[1];
+    }
+  }
+}
+*/
+
+if ($component == 'Drupal') {
+  exec("drupalorg project:release-notes drupal $version", $release_output, $status);
+  $release_contents = implode("\n", $release_output);
+  if (preg_match_all('#Drupal Core.*(SA-CORE-[0-9*a-z*A-Z*_-]+)#', $release_contents, $matches, PREG_SET_ORDER)) {
+    foreach ($matches as $match_set) {
+      // SA-CORE-2018-006
+      $sa_title = trim($match_set[0]);
+      $sa_name = $match_set[1];
+      $sa_url = "https://www.drupal.org/" . strtolower($sa_name);
     }
   }
 }
@@ -111,14 +134,27 @@ if (empty($token)) {
 $page_id="80f0zgsx80zh";
 $org_id="5p5f33w3857z";
 
-exec("curl https://api.statuspage.io/v1/pages/$page_id/incidents.json \
+$do = $simulate ? 'echo ' : '';
+
+$cmd = "curl https://api.statuspage.io/v1/pages/$page_id/incidents.json \
     -H 'Authorization: OAuth $token' \
     -X POST \
     -d 'incident[name]=$incident_name' \
     -d 'incident[status]=$incident_status' \
     -d 'incident[wants_twitter_update]=t' \
     -d 'incident[body]=$message' \
-    -d 'incident[deliver_notifications]=true'", $status_output, $status);
+    -d 'incident[deliver_notifications]=true'";
+
+print "$cmd\n";
+
+if ($simulate) {
+  exit(0);
+}
+
+print "DO IT!";
+exit(0);
+
+exec($cmd, $status_output, $status);
 
 // TODO: Process output
 print(implode("\n", $status_output));
