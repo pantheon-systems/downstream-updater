@@ -47,11 +47,6 @@ function find_changelog_issue($project, $month_index)
   return find_by_regex("https://api.github.com/repos/$project/issues?state=open", changelog_regex_this($month_index));
 }
 
-function find_pull_request($project, $version)
-{
-  return find_by_regex("https://api.github.com/repos/$project/pulls?state=all", update_version_regex($version));
-}
-
 function find_by_regex($search, $regex)
 {
   $result = false;
