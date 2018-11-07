@@ -203,7 +203,9 @@ else {
 print "expected version is $expected_version";
 
 $commit_message = "Update to " . ucfirst($upstream_short_name) . " $available_version_label.";
-if (!$release_node && !$dev) {
+if (!$release_node && !$dev && preg_match('#^[0-9]+\.[0-9]+\.[0-9]+$#', $available_version)) {
+  // NOTE: We can no longer look up the release node due to
+  // https://www.perimeterx.com/whywasiblocked/#
   // Confirm that we can find an appropriate release node.  This is not
   // great; the pattern it is looking for is too specific, so we won't find
   // anything if the release node URL format changes.
@@ -212,6 +214,8 @@ if (!$release_node && !$dev) {
   if (!empty($release_node_output) && ($status == 0)) {
     $release_node = $release_node_output[0];
   }
+  // TODO: It would be swell if we could determine whether or not this page exists.
+  $release_node = "https://www.drupal.org/project/drupal/releases/$available_version";
 }
 if ($release_node) {
   $commit_message .= " For more information, see $release_node";
