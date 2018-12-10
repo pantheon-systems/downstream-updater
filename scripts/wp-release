@@ -38,23 +38,6 @@ fi
 set +e
 version_tag=$(git tag -l | grep "^$version\$")
 set -e
-if [ -n "$version_tag" ] ; then
-  echo "Current release already tagged; nothing to do."
-  exit 0
-fi
-
-# Delete all of the non-semver tags from the local repository to
-# avoid conflicts when pushing
-set +e
-non_semver=$(git tag -l | grep -v '^v*[0-9.]*$')
-set -e
-for tag in $non_semver ; do
-  git tag -d $tag
-done
-
-# Tag the new release
-git tag $version
-git push origin $version
 
 # Add a note to the documentation changelog
 $SELF_DIRNAME/update_changelog --fix --name=WordPress --project=pantheon-systems/WordPress --version="$version" --message="$commit_message"

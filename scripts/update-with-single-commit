@@ -37,8 +37,6 @@ function do_exec($command, &$output, &$status) {
 //
 //  --upstream git://git.drupal.org/project/drupal.git      Where to find updated releases
 //
-//  --mergerepo git@github.com:pantheon-systems/drupal.git  Where to combine the Pantheon modifications before squashing
-//
 //  --project-cache /path                                   Where to clone repositories
 //
 //  --release 8.0.6                                         Which release to take (default is next available)
@@ -65,7 +63,6 @@ $options = getopt ("dv", array(
   'main-branch:',
 )) + array(
   'upstream' => "git://git.drupal.org/project/drupal.git",
-  'mergerepo' => "git@github.com:pantheon-systems/drupal.git",
   'project-cache' => $home . "/local/upstreams",
   'version-major' => 8,
   'release-node' => '',
@@ -91,7 +88,6 @@ $dev = array_key_exists('dev', $options) || array_key_exists('future-dev', $opti
 $pre_release = array_key_exists('pre-release', $options);
 $fix_composer = array_key_exists('composer', $options) ? $options['composer'] : null;
 $upstream_url = $options['upstream'];
-$mergerepo_url = $options['mergerepo'];
 $project_cache = $options['project-cache'];
 $version_major = $options['version-major'];
 $upstream_branch = $options['upstream-branch'];
@@ -107,15 +103,9 @@ $allow_beta = array_key_exists('beta', $options) || $pre_release;
 $upstream_org = 'drupal-org'; // TODO: get from $upstream_url
 $upstream_short_name = basename($upstream_url, ".git");
 $upstream_name = $upstream_org . '-' . $upstream_short_name;
-$mergerepo_org = 'pantheon-systems'; // TODO: get from $mergerepo_url
-$mergerepo_name = $mergerepo_org . '-' . basename($mergerepo_url, ".git");
 $upstream_path = $project_cache . '/' . $upstream_name;
-$mergerepo_path = $project_cache . '/' . $mergerepo_name;
 
-// TODO: build from the $mergerepo_url
-$mergerepo_upstream_remote = "drupal-org";
-
-$BUILD_DIR=dirname($project_dir_to_update) . '/drops-8-build';
+$BUILD_DIR=dirname($project_dir_to_update) . "/drops-$version_major-build";
 
 do_exec("git config --get remote.origin.url", $remoteurl_output, $status);
 $repo_url=$remoteurl_output[0];
@@ -237,25 +227,25 @@ if (!empty($checkTagOutput) && !$dev) {
 }
 
 
+if ($version_major == '8') {
+  print "----------------------------------------------------------------------------------\n";
+  print "Check to see if new tag has changes to scaffold files; we will pre-tag drops-8-scaffolding if not.\n";
 
-print "----------------------------------------------------------------------------------\n";
-print "Check to see if new tag has changes to scaffold files; we will pre-tag drops-8-scaffolding if not.\n";
-
-$additional_tag = '';
-if ($allow_beta) {
-  $additional_tag = '--additional-tag ' . $available_version;
+  $additional_tag = '';
+  if ($allow_beta) {
+    $additional_tag = '--additional-tag ' . $available_version;
+  }
+  do_passthru(__DIR__ . "/pre-tag-drops-8-scaffolding --build-dir $BUILD_DIR $additional_tag");
 }
-do_passthru(__DIR__ . "/pre-tag-drops-8-scaffolding --build-dir $BUILD_DIR $additional_tag");
-
 
 print "----------------------------------------------------------------------------------\n";
 
 print "About to update to $available_version\n";
 
-$drops8_work_dir = do_exec("mktemp -d $project_cache/update-drops8-tmp.XXX", $unused_output, $unused_status);
-$drops8TargetPath = "$drops8_work_dir/drops-8";
+$drops_work_dir = do_exec("mktemp -d $project_cache/update-drops{$version_major}-tmp.XXX", $unused_output, $unused_status);
+$drops8TargetPath = "$drops_work_dir/drops-{$version_major}";
 
-print "Work dir is: $drops8_work_dir\n";
+print "Work dir is: $drops_work_dir\n";
 
 // STEP 1: Clone the desired version of Drupal from the source git repository
 // and then get rid of the .git directory

@@ -4,7 +4,7 @@
 # Set some defaults if PANTHEON_SITE and PANTHEON_BRANCH are not set
 ###
 test -n "$PANTHEON_SITE" || PANTHEON_SITE=wp-update
-test -n "$PANTHEON_BRANCH" || PANTHEON_BRANCH=update
+test -n "$PANTHEON_BRANCH" || PANTHEON_BRANCH=updatework
 test -n "$PANTHEON_UPSTREAM" || PANTHEON_UPSTREAM=git@github.com:pantheon-systems/WordPress.git
 
 # Set the scripts dir if it was not explicitly given to us
@@ -228,9 +228,9 @@ update_commit=$(git rev-parse HEAD)
 git checkout default
 git rebase origin/master
 git push --force origin default
-git checkout -B update-$UPDATED_VERSION default
+git checkout -B updates-$UPDATED_VERSION default
 # git cherry-pick $update_commit
-git merge "$PANTHEON_BRANCH" -m "$current_comment"
+git merge "pantheon/$PANTHEON_BRANCH" -m "$current_comment"
 
 
 
@@ -256,7 +256,7 @@ git merge "$PANTHEON_BRANCH" -m "$current_comment"
 # Merge in the test scripts (.circleci/config.yml & c.) from the 'test' branch.
 # This material will be removed when the PR is merged back
 ###
-git push origin update-$UPDATED_VERSION
+git push origin updates-$UPDATED_VERSION
 
 ###
 # Pull request message
@@ -276,7 +276,7 @@ Inspect the result of the [functional tests run by Circle CI](https://circleci.c
 - Apply the files from this PR on top of your local checkout.
   - git remote add WordPress git@github.com:pantheon-systems/WordPress.git
   - git fetch WordPress
-  - git merge WordPress/update-$UPDATED_VERSION
+  - git merge WordPress/updates-$UPDATED_VERSION
 - Push your files back up to Pantheon.
 - Switch back to sftp mode.
 - Visit your site and step through the installation process.

@@ -33,7 +33,7 @@ while [ $# -gt 0 ] ; do
     wp|WordPress|wordpress)
       SOURCE_PROJECT=WordPress
       TARGET_PROJECT=wordpress-composer
-      MAJOR_VERSION=4
+      MAJOR_VERSION=5
       ;;
 
     d7)
