@@ -105,9 +105,9 @@ if $ROLLBACK ; then
     done
 
     while true; do
-        read -p "Does that look right?" yn
+        read -p "Does that look right? " yn
         case $yn in
-            [Yy]* ) echo;;
+            [Yy]* ) echo; break;;
             [Nn]* ) exit;;
             * ) echo "Please answer yes or no.";;
         esac
@@ -156,9 +156,9 @@ if [ $SIMULATE == false ] ; then
   done
 
   while true; do
-      read -p "Does that look right?" yn
+      read -p "Does that look right? " yn
       case $yn in
-          [Yy]* ) echo;;
+          [Yy]* ) echo; break;;
           [Nn]* ) exit;;
           * ) echo "Please answer yes or no.";;
       esac
