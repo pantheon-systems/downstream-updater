@@ -35,7 +35,7 @@ function do_exec($command, &$output, &$status) {
 //
 //  -v                                                      Verbose mode
 //
-//  --upstream git://git.drupal.org/project/drupal.git      Where to find updated releases
+//  --upstream https://git.drupal.org/project/drupal.git      Where to find updated releases
 //
 //  --project-cache /path                                   Where to clone repositories
 //
@@ -62,7 +62,7 @@ $options = getopt ("dv", array(
   'release:',
   'main-branch:',
 )) + array(
-  'upstream' => "git://git.drupal.org/project/drupal.git",
+  'upstream' => "https://git.drupal.org/project/drupal.git",
   'project-cache' => $home . "/local/upstreams",
   'version-major' => 8,
   'release-node' => '',
