@@ -22,6 +22,7 @@ PARENT_DIRNAME="`dirname -- "$SELF_DIRNAME"`"
 SOURCE_PROJECT=drops-7
 TARGET_PROJECT=drops-7-composer
 MAJOR_VERSION=7
+DELETE_LIST=
 DO=
 
 while [ $# -gt 0 ] ; do
@@ -34,9 +35,15 @@ while [ $# -gt 0 ] ; do
       SOURCE_PROJECT=WordPress
       TARGET_PROJECT=wordpress-composer
       MAJOR_VERSION=5
+      DELETE_LIST=wp-config.php
       ;;
 
     d7)
+      ;;
+
+    rm)
+      DELETE_LIST="$DELETE_LIST $1"
+      shift
       ;;
 
     -s|--simulate)
@@ -129,6 +136,12 @@ for tag in $tags ; do
 
     rsync -ravz --exclude=.git --delete $SOURCE_PROJECT_DIR/ $TARGET_COMPOSER_PROJECT_DIR >/dev/null 2>&1
     cp $COMPOSER_JSON_FILE $TARGET_COMPOSER_PROJECT_DIR/composer.json
+
+    if [ -n $DELETE_LIST ] ; then
+      for f in $DELETE_LIST ; do
+        rm $f
+      done
+    fi
 
     git -C $TARGET_COMPOSER_PROJECT_DIR add -A --force . >/dev/null 2>&1
     git -C $TARGET_COMPOSER_PROJECT_DIR commit -m "$comment" --author="Pantheon Automation <bot@getpantheon.com>" --date="$commitdate" >/dev/null 2>&1
