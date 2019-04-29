@@ -49,7 +49,7 @@ if (empty($component)) {
   $component = preg_replace('#\..*#', '', $upstream_org);
 }
 
-print "Componente: $component\nRelease url: $release_url\n";
+print "Component: $component\nRelease url: $release_url\n";
 
 /*
 // Old way to check Drupal releases (obsolete)
@@ -72,7 +72,10 @@ if (!empty($release_url)) {
 if ($component == 'Drupal') {
   exec("drupalorg project:release-notes drupal $version", $release_output, $status);
   $release_contents = implode("\n", $release_output);
-  if (preg_match_all('#Drupal Core.*(SA-CORE-[0-9*a-z*A-Z*_-]+)#', $release_contents, $matches, PREG_SET_ORDER)) {
+
+  print "Release notes:\n$release_contents\n";
+
+  if (preg_match_all('#Drupal Core.*(SA-CORE-[0-9*a-z*A-Z*_-]+)#i', $release_contents, $matches, PREG_SET_ORDER)) {
     foreach ($matches as $match_set) {
       // SA-CORE-2018-006
       $sa_title = trim($match_set[0]);
@@ -82,14 +85,8 @@ if ($component == 'Drupal') {
   }
 }
 
-// Exit early if this is not a security release.
-if (empty($sa_url)) {
-  print "Not a security release; omitting status page.\n";
-  exit(0);
-}
-
-// Use generic template
-if (empty($message)) {
+// Use template with SA reference
+if (empty($message) && !empty($sa_url)) {
   $message=<<<EOT
 {upstream-org} has released {component} version {version}. This release is classified as a security release for all previous versions of {component}.[1] Pantheon has made the update available for one-click update in site dashboards. We urge all users to update all environments as soon as possible. Instructions for applying core updates can be found in our Support Center.[2] This release addresses {sa-name}[3]; all users are urged to upgrade their sites as soon as possible.
 
@@ -97,6 +94,22 @@ if (empty($message)) {
   [2] - {upstream-updates-url}
   [3] - {sa-url}
 EOT;
+}
+
+// Use generic template
+if (empty($message) && strpos($release_url, 'security') !== false) {
+  $message=<<<EOT
+{upstream-org} has released {component} version {version}. This release is classified as a security release for all previous versions of {component}.[1] Pantheon has made the update available for one-click update in site dashboards. We urge all users to update all environments as soon as possible. Instructions for applying core updates can be found in our Support Center.[2] See release notes for more information on the resolved issues in this release; all users are urged to upgrade their sites as soon as possible.
+
+  [1] - {release-url}
+  [2] - {upstream-updates-url}
+EOT;
+}
+
+// Exit if this is not a security release.
+if (empty($message)) {
+  print "Not a security release; omitting status page.\n";
+  exit(0);
 }
 
 if (empty($incident_name)) {
@@ -134,8 +147,6 @@ if (empty($token)) {
 $page_id="80f0zgsx80zh";
 $org_id="5p5f33w3857z";
 
-$do = $simulate ? 'echo ' : '';
-
 $cmd = "curl https://api.statuspage.io/v1/pages/$page_id/incidents.json \
     -H 'Authorization: OAuth $token' \
     -X POST \
@@ -152,7 +163,6 @@ if ($simulate) {
 }
 
 print "DO IT!";
-exit(0);
 
 exec($cmd, $status_output, $status);
 
