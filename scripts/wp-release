@@ -15,6 +15,14 @@ set -ex
 # Get the current branch
 branch=$(git rev-parse --abbrev-ref HEAD)
 
+# If we're on the default branch, switch to master and pull.
+if [ "$branch" == "default" ]
+then
+  git checkout master
+  git pull origin master
+  branch=master
+fi
+
 # Require the master branch
 if [ "$branch" != "master" ]
 then
@@ -39,6 +47,9 @@ set +e
 version_tag=$(git tag -l | grep "^$version\$")
 set -e
 
+git tag $version
+git push origin $version
+
 # Add a note to the documentation changelog
 $SELF_DIRNAME/update_changelog --fix --name=WordPress --project=pantheon-systems/WordPress --version="$version" --message="$commit_message"
 
@@ -52,7 +63,7 @@ fi
 
 # Release on wordpress-network too
 git push wordpress-network master
-git push wordpress-network master $version
+git push wordpress-network $version
 
 # Update the pantheon-systems/wordpress-composer version of
 # this upstream, which squashes each release to one commit
@@ -66,3 +77,5 @@ $SELF_DIRNAME/wait-for-packagist pantheon-systems/wordpress-composer $version
 
 # Make a PR to update the example-wordpress-composer composer.lock file.
 clu pantheon-systems/example-wordpress-composer
+
+$SELF_DIRNAME/statuspage --release-url="$release_url" --version="$version_tag" --simulate
