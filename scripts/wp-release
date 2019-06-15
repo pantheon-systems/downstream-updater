@@ -50,6 +50,8 @@ set -e
 git tag $version
 git push origin $version
 
+commit_message="$(git log --pretty=format:%s -1)"
+
 # Add a note to the documentation changelog
 $SELF_DIRNAME/update_changelog --fix --name=WordPress --project=pantheon-systems/WordPress --version="$version" --message="$commit_message"
 
