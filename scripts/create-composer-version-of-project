@@ -77,7 +77,7 @@ fi
 echo "### Set up target project"
 if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
 then
-  # git clone $TARGET_COMPOSER_PROJECT_GITHUB $TARGET_COMPOSER_PROJECT_DIR --branch=master
+  git clone $TARGET_COMPOSER_PROJECT_GITHUB $TARGET_COMPOSER_PROJECT_DIR --branch=master
   if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
   then
     mkdir -p $TARGET_COMPOSER_PROJECT_DIR
