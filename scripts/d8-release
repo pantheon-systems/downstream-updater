@@ -84,7 +84,10 @@ $SELF_DIRNAME/create-drops-8-scaffolding
 # Wait for Packagist to be updated with the new version created by the
 # script above. If we do not wait, our call to composer-lock-update
 # will not see our latest update.
-# n.b. pantheon-systems/drupal-core does not exist yet.
+$SELF_DIRNAME/wait-for-packagist pantheon-systems/drops-8-scaffolding $version
+
+# TODO: Make a pantheon-systems/drupal-core that is just a clone of
+# drupal/core, but tagged after drops-8 is updated.
 # $SELF_DIRNAME/wait-for-packagist pantheon-systems/drupal-core $version
 
 # Make a PR to update the example-drops-8-composer composer.lock file.
