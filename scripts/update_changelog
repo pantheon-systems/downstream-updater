@@ -99,13 +99,13 @@ function changelog_regex_both($month_index)
 function changelog_regex_next($month_index)
 {
   list($start_month, $next_month) = changelog_regex_months($month_index);
-  return "#^${next_month}[a-z]* changelog#i";
+  return "#^${next_month}[a-z]* [0-9 ]*changelog#i";
 }
 
 function changelog_regex_this($month_index)
 {
   list($start_month, $next_month) = changelog_regex_months($month_index);
-  return "#^${start_month}[a-z]* changelog#i";
+  return "#^${start_month}[a-z]* [0-9 ]*changelog#i";
 }
 
 function update_version_regex($version)
