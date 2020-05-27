@@ -70,14 +70,14 @@ git push wordpress-network $version
 # Update the pantheon-systems/wordpress-composer version of
 # this upstream, which squashes each release to one commit
 # and adds a composer.json file.
-$SELF_DIRNAME/create-composer-version-of-project wp
+# $SELF_DIRNAME/create-composer-version-of-project wp
 
 # Wait for Packagist to be updated with the new version created by the
 # script above. If we do not wait, our call to composer-lock-update
 # will not see our latest update.
-$SELF_DIRNAME/wait-for-packagist pantheon-systems/wordpress-composer $version
+# $SELF_DIRNAME/wait-for-packagist pantheon-systems/wordpress-composer $version
 
 # Make a PR to update the example-wordpress-composer composer.lock file.
-clu pantheon-systems/example-wordpress-composer
+# clu pantheon-systems/example-wordpress-composer
 
 $SELF_DIRNAME/statuspage --release-url="$release_url" --version="$version_tag" --simulate

@@ -1,6 +1,9 @@
 #!/usr/bin/env php
 <?php
 
+echo 'Obsolete; use "updatinate project:upstream:update drops-8-previous" instead.'
+exit 0
+
 // n.b. This script is currently drops-8 specific
 
 $home = getenv("HOME");
@@ -45,7 +48,7 @@ function do_exec($command, &$output, &$status) {
 //
 //  --beta | --pre-release                                  Allow alpha/beta/rc versions
 //
-$options = getopt ("dv", array(
+$options = getopt("dv", array(
   'dev',
   'future-dev',
   'beta',
@@ -61,8 +64,9 @@ $options = getopt ("dv", array(
   'merge-label:',
   'release:',
   'main-branch:',
-)) + array(
-  'upstream' => "https://git.drupal.org/project/drupal.git",
+  'pantheon-integrations',
+), $optind) + array(
+  'upstream' => "https://git.drupalcode.org/project/drupal.git",
   'project-cache' => $home . "/local/upstreams",
   'version-major' => 8,
   'release-node' => '',
@@ -71,6 +75,10 @@ $options = getopt ("dv", array(
   'release' => '',
   'main-branch' => 'default',
 );
+
+
+
+print "optind is $optind\n";
 
 $options += array(
   'upstream-branch' => 'drupal-' . $options['version-major'],
@@ -82,7 +90,7 @@ $BOT_NAME = "Pantheon Automation";
 $BOT_EMAIL = "bot@getpantheon.com";
 $BOT_IDENTIFIER = "$BOT_NAME <$BOT_EMAIL>";
 
-// var_export($options);
+var_export($options);
 
 $dev = array_key_exists('dev', $options) || array_key_exists('future-dev', $options);
 $pre_release = array_key_exists('pre-release', $options);
@@ -99,6 +107,7 @@ $merge_label = $options['merge-label'];
 $user_selected_release = $options['release'];
 $main_branch = $options['main-branch'];
 $allow_beta = array_key_exists('beta', $options) || $pre_release;
+$pantheon_integrations = array_key_exists('pantheon-integrations', $options);
 
 $upstream_org = 'drupal-org'; // TODO: get from $upstream_url
 $upstream_short_name = basename($upstream_url, ".git");
@@ -111,7 +120,7 @@ do_exec("git config --get remote.origin.url", $remoteurl_output, $status);
 $repo_url=$remoteurl_output[0];
 
 print("Remote URL is $repo_url\n");
-
+print("User selected release is $user_selected_release\n");
 
 $cmd = "git rev-parse --abbrev-ref HEAD";
 do_exec($cmd, $current_branch_output, $status);
@@ -190,10 +199,15 @@ else {
   $available_version_label = $available_version;
 }
 
-print "expected version is $expected_version";
+if ($version_major >= 9) {
+  $pantheon_integrations = true;
+}
+
+print "expected version is $expected_version\n";
+
 
 $commit_message = "Update to " . ucfirst($upstream_short_name) . " $available_version_label.";
-if (!$release_node && !$dev && preg_match('#^[0-9]+\.[0-9]+\.[0-9]+$#', $available_version)) {
+if (!$release_node && !$dev /* && preg_match('#^[0-9]+\.[0-9]+\.[0-9]+$#', $available_version) */) {
   // NOTE: We can no longer look up the release node due to
   // https://www.perimeterx.com/whywasiblocked/#
   // Confirm that we can find an appropriate release node.  This is not
@@ -227,6 +241,7 @@ if (!empty($checkTagOutput) && !$dev) {
 }
 
 
+// No drops-8-scaffolding work if version_major is '9'
 if ($version_major == '8') {
   print "----------------------------------------------------------------------------------\n";
   print "Check to see if new tag has changes to scaffold files; we will pre-tag drops-8-scaffolding if not.\n";
@@ -254,6 +269,21 @@ do_passthru("git clone -q --depth 1 --branch $available_version $upstream_url $d
 do_passthru("rm -rf $drops8TargetPath/.git");
 do_passthru("composer --working-dir=$drops8TargetPath -q install --prefer-dist --no-dev --optimize-autoloader");
 
+// If we need to inject the Pantheon integrations, then read
+// and rewrite the composer.json file and update as needed.
+if ($pantheon_integrations) {
+  $composer_json_path = "$drops8TargetPath/composer.json";
+  $composer_json = json_decode(file_get_contents($composer_json_path), true);
+
+  $composer_json['extra']['drupal-scaffold']['allowed-packages'][] = 'pantheon-systems/drupal-integrations';
+
+  $composer_json['require']['pantheon-systems/drupal-integrations'] = '^8'; // "^$version_major";
+
+  file_put_contents($composer_json_path, json_encode($composer_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+  do_passthru("composer --working-dir=$drops8TargetPath -q require pantheon-systems/drupal-integrations");
+}
+
 // STEP 2:  Confirm that the Drupal verison looks okay
 
 $cmd = "drush --root=$drops8TargetPath status 'Drupal version' --format=list";
@@ -263,6 +293,9 @@ if ($drupal_version_output != $expected_version) {
   print("\n\nERROR. Tried to download $expected_version, but we have version $drupal_version_output at $drops8TargetPath\n");
   exit(1);
 }
+
+print "$drops8TargetPath looks ok : $drupal_version_output\n";
+exit(0);
 
 // STEP 3: Create a branch to merge any PRs labeled 'shipit'
 

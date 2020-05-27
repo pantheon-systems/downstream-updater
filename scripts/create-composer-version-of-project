@@ -15,6 +15,9 @@
 # project is updated (i.e. on release).
 #
 
+echo 'Obsolete; use "updatinate project:derivative:update [drops-7-composer|wordpress-composer]" instead.'
+exit 0
+
 SELF_DIRNAME="`dirname -- "$0"`"
 PARENT_DIRNAME="`dirname -- "$SELF_DIRNAME"`"
 
@@ -58,15 +61,14 @@ while [ $# -gt 0 ] ; do
 done
 
 
-SOURCE_PROJECT_DIR=$HOME/pantheon/build/$SOURCE_PROJECT
-TARGET_COMPOSER_PROJECT_DIR=$HOME/pantheon/build/$TARGET_PROJECT
+SOURCE_PROJECT_DIR="$HOME/pantheon/build/$SOURCE_PROJECT"
+TARGET_COMPOSER_PROJECT_DIR="$HOME/pantheon/build/$TARGET_PROJECT"
 
 SOURCE_PROJECT_GITHUB="git@github.com:pantheon-systems/${SOURCE_PROJECT}.git"
 TARGET_COMPOSER_PROJECT_GITHUB="git@github.com:pantheon-systems/${TARGET_PROJECT}.git"
 
-COMPOSER_JSON_FILE=$PARENT_DIRNAME/data/composer-json/${TARGET_PROJECT}.json
-if [ ! -f "$COMPOSER_JSON_FILE" ]
-then
+COMPOSER_JSON_FILE="$PARENT_DIRNAME/data/composer-json/${TARGET_PROJECT}.json"
+if [ ! -f "$COMPOSER_JSON_FILE" ] ; then
   echo "Project $SOURCE_PROJECT not supported: no composer.json found at $COMPOSER_JSON_FILE."
   exit 1
 fi
@@ -75,11 +77,9 @@ fi
 # Make our target repository $TARGET_COMPOSER_PROJECT_DIR if it does not already exist
 #
 echo "### Set up target project"
-if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
-then
+if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ] ; then
   git clone $TARGET_COMPOSER_PROJECT_GITHUB $TARGET_COMPOSER_PROJECT_DIR --branch=master
-  if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ]
-  then
+  if [ ! -d $TARGET_COMPOSER_PROJECT_DIR ] ; then
     mkdir -p $TARGET_COMPOSER_PROJECT_DIR
     (
       cd $TARGET_COMPOSER_PROJECT_DIR
@@ -96,8 +96,7 @@ fi
 # Make a clean local clone of $SOURCE_PROJECT_DIR if it is not already there
 #
 echo "### Set up source project"
-if [ ! -d $SOURCE_PROJECT_DIR ]
-then
+if [ ! -d $SOURCE_PROJECT_DIR ] ; then
   git clone $SOURCE_PROJECT_GITHUB $SOURCE_PROJECT_DIR --branch=master
 else
   git -C $SOURCE_PROJECT_DIR checkout master
@@ -107,7 +106,7 @@ fi
 #
 # Get a list of all of the tags available in $SOURCE_PROJECT_DIR, sorted.
 #
-tags=$(git -C $SOURCE_PROJECT_DIR tag -l | grep "^$MAJOR_VERSION\.[0-9.]*$" | sort -t. -n --key=2)
+tags="$(git -C $SOURCE_PROJECT_DIR tag -l | grep "^$MAJOR_VERSION\.[0-9.]*$" | sort -t. -n --key=2)"
 
 #
 # Iterate over all of the tags
@@ -118,34 +117,36 @@ for tag in $tags ; do
   #
   # Check the commit hash for the tag in $SOURCE_PROJECT_DIR and $TARGET_COMPOSER_PROJECT_DIR
   #
-  ref=$(git -C $SOURCE_PROJECT_DIR rev-parse refs/tags/$tag 2>/dev/null)
-  targetref=$(git -C $TARGET_COMPOSER_PROJECT_DIR rev-parse refs/tags/$tag 2>/dev/null)
-  if [ "$?" == "0" ]
-  then
-    echo "$SOURCE_PROJECT tag $tag exits at $targetref"
+  ref="$(git -C $SOURCE_PROJECT_DIR rev-parse refs/tags/$tag 2>/dev/null)"
+  echo git -C $TARGET_COMPOSER_PROJECT_DIR tag -l $tag
+  git -C $TARGET_COMPOSER_PROJECT_DIR tag -l $tag
+  targettag="$(git -C $TARGET_COMPOSER_PROJECT_DIR tag -l $tag 2>/dev/null)"
+  echo "target tag is $targettag"
+  if [ -n "$targettag" ] ; then
+    echo "$SOURCE_PROJECT tag $tag exits in $TARGET_COMPOSER_PROJECT_DIR"
   else
     echo "create $tag from $SOURCE_PROJECT $ref"
     #
     # If the tag does not exist in the target yet, then create it.
     #
-    comment="$(git -C $SOURCE_PROJECT_DIR log -1 $tag --pretty=format:"%s")"
-    commitdate="$(git -C $SOURCE_PROJECT_DIR log -1 --date=iso $tag --pretty=format:"%cd")"
+    comment="$(git -C $SOURCE_PROJECT_DIR log -1 --pretty=format:"%s" $tag)"
+    commitdate="$(git -C $SOURCE_PROJECT_DIR log -1 --date=iso --pretty=format:"%cd" $tag)"
     echo "Date: $commitdate"
     echo "Comment: $comment"
     git -C $SOURCE_PROJECT_DIR checkout $tag >/dev/null 2>&1
 
-    rsync -ravz --exclude=.git --delete $SOURCE_PROJECT_DIR/ $TARGET_COMPOSER_PROJECT_DIR >/dev/null 2>&1
-    cp $COMPOSER_JSON_FILE $TARGET_COMPOSER_PROJECT_DIR/composer.json
+    $DO rsync -ravz --exclude=.git --delete $SOURCE_PROJECT_DIR/ $TARGET_COMPOSER_PROJECT_DIR >/dev/null 2>&1
+    $DO cp $COMPOSER_JSON_FILE $TARGET_COMPOSER_PROJECT_DIR/composer.json
 
     if [ -n $DELETE_LIST ] ; then
       for f in $DELETE_LIST ; do
-        rm $f
+        $DO rm $f
       done
     fi
 
-    git -C $TARGET_COMPOSER_PROJECT_DIR add -A --force . >/dev/null 2>&1
-    git -C $TARGET_COMPOSER_PROJECT_DIR commit -m "$comment" --author="Pantheon Automation <bot@getpantheon.com>" --date="$commitdate" >/dev/null 2>&1
-    git -C $TARGET_COMPOSER_PROJECT_DIR tag "$tag" >/dev/null 2>&1
+    $DO git -C $TARGET_COMPOSER_PROJECT_DIR add -A --force . >/dev/null 2>&1
+    $DO git -C $TARGET_COMPOSER_PROJECT_DIR commit -m "$comment" --author="Pantheon Automation <bot@getpantheon.com>" --date="$commitdate" >/dev/null 2>&1
+    $DO git -C $TARGET_COMPOSER_PROJECT_DIR tag "$tag" >/dev/null 2>&1
 
     # Check to see if we have the right version?
     # drush -r $TARGET_COMPOSER_PROJECT_DIR status 'Drupal version'

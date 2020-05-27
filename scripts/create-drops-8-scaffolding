@@ -11,6 +11,9 @@
 # drops-8-scaffolding, that is a reduced version of the original.
 #
 
+echo 'Obsolete; use "updatinate project:derivative:update drops-8-scaffolding" instead.'
+exit 0
+
 SELF_DIRNAME="`dirname -- "$0"`"
 PARENT_DIRNAME="`dirname -- "$SELF_DIRNAME"`"
 
@@ -130,6 +133,8 @@ for tag in $tags ; do
     # added --exclude=core --exclude=vendor --exclude=composer.lock
     rsync -ravz --exclude=.git --exclude=core --exclude=vendor --exclude=composer.lock --delete $SOURCE_PROJECT_DIR/ $TARGET_COMPOSER_PROJECT_DIR >/dev/null 2>&1
     # cp $COMPOSER_JSON_FILE $TARGET_COMPOSER_PROJECT_DIR/composer.json
+
+    sed -i '' -e 's#"name":.*#"name": "pantheon-systems/drops-8-scaffolding",#' $TARGET_COMPOSER_PROJECT_DIR/composer.json
 
     git -C $TARGET_COMPOSER_PROJECT_DIR add -A --force . >/dev/null 2>&1
     git -C $TARGET_COMPOSER_PROJECT_DIR commit -m "$comment" --author="Pantheon Automation <bot@getpantheon.com>" --date="$commitdate" >/dev/null 2>&1

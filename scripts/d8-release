@@ -76,7 +76,8 @@ release_url="$(echo "$commit_message" | sed -e 's#.*\(https://.*\)#\1#')"
 $SELF_DIRNAME/statuspage --release-url="$release_url"
 
 # Update our scaffolding files project too (if it was not pre-tagged)
-$SELF_DIRNAME/create-drops-8-scaffolding
+# This is now done by the updatinate tool
+# $SELF_DIRNAME/create-drops-8-scaffolding
 
 # TODO: Make a pantheon-systems/drupal-core that is just a clone of
 # drupal/core, but tagged after drops-8 is updated.
@@ -84,14 +85,15 @@ $SELF_DIRNAME/create-drops-8-scaffolding
 # Wait for Packagist to be updated with the new version created by the
 # script above. If we do not wait, our call to composer-lock-update
 # will not see our latest update.
-$SELF_DIRNAME/wait-for-packagist pantheon-systems/drops-8-scaffolding $version
+#$SELF_DIRNAME/wait-for-packagist pantheon-systems/drops-8-scaffolding $version
 
 # TODO: Make a pantheon-systems/drupal-core that is just a clone of
 # drupal/core, but tagged after drops-8 is updated.
 # $SELF_DIRNAME/wait-for-packagist pantheon-systems/drupal-core $version
 
 # Make a PR to update the example-drops-8-composer composer.lock file.
-clu pantheon-systems/example-drops-8-composer
+# TODO: We still need to run this at some point
+#clu pantheon-systems/example-drops-8-composer
 
 # TODO: Maybe post a list of links somewhere, maybe on the original PR?
 # List of links should be similar to:
